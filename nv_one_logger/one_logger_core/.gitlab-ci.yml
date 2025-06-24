@@ -30,7 +30,7 @@ core-build-prod-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - cd one_logger_core 
+    - cd nv_one_logger/one_logger_core 
     - make ci_release
     - echo "making publish"
     - make publish
@@ -58,7 +58,7 @@ core-build-staging-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - cd one_logger_core 
+    - cd nv_one_logger/one_logger_core 
     - make ci_release
     - echo "making publish"
     - make publish
@@ -74,7 +74,7 @@ core-unit-tests:
   script:
     - echo "installing poetry."
     - pip install poetry==1.8.5 wheel
-    - cd one_logger_core 
+    - cd nv_one_logger/one_logger_core 
     - echo "checking lint/format."
     - make check
     - echo "running tests..."
@@ -87,7 +87,7 @@ core-pages:
   image: python:3.8
   script:
     - pip install -U sphinx
-    - cd one_logger_core 
+    - cd nv_one_logger/one_logger_core
     - sphinx-build -b html . public
   artifacts:
     paths:

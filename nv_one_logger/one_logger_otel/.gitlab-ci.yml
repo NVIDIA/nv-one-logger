@@ -8,7 +8,7 @@ stages:
   - doc
   - build
 
-wandb-build-prod-job:
+otel-build-prod-job:
   stage: build
   when: manual
   only: 
@@ -30,13 +30,14 @@ wandb-build-prod-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
+    - cd nv_one_logger/one_logger_otel
     - make ci_release
     - echo "making publish"
     - make publish
   tags:
     - hwinfdcm
 
-wandb-build-staging-job:
+build-staging-job:
   stage: build
   only: 
     - merged
@@ -57,14 +58,14 @@ wandb-build-staging-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - cd one_logger_wandb
+    - cd nv_one_logger/one_logger_otel
     - make ci_release
     - echo "making publish"
     - make publish
   tags:
     - hwinfdcm
 
-wandb-unit-tests:
+otel-unit-tests:
   stage: test
   coverage: '/TOTAL.*\s+(\d+%)$/'
   image: 
@@ -73,24 +74,24 @@ wandb-unit-tests:
   script:
     - echo "installing poetry."
     - pip install poetry==1.8.5 wheel
+    - cd nv_one_logger/one_logger_otel
     - echo "checking lint/format."
-    - cd one_logger_wandb 
     - make check
     - echo "running tests..."
     - make test # All tests will run
   tags:
     - hwinfdcm
 
-wandb-pages:
+otel-pages:
   stage: doc
   image: python:3.8
   script:
     - pip install -U sphinx
-    - cd one_logger_wandb
+    - cd nv_one_logger/one_logger_otel
     - sphinx-build -b html . public
   artifacts:
     paths:
-      - one_logger_wandb/public
+      - one_logger_otel/public
   tags:
     - hwinfdcm
 

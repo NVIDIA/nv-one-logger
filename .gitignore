@@ -1,0 +1,28 @@
+*.err
+*.log
+*.pyc
+*.swp
+dist/
+.DS_Store
+.coverage
+*/*/.coverage/*
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*/*/__pytest_cache__
+*/__pytest_cache__
+*/.pytest_cache
+*/.mypy_cache
+*.py[cod]
+*$py.class
+*/*.pyc
+
+
+# IDE
+.vscode
+
+# Build Env
+.cache
+.venv
+release
+

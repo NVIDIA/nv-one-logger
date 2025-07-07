@@ -11,9 +11,10 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.8"
 StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python requirement to >= 3.11
-wandb = "^0.15.4"
+wandb = "^0.20.1"
 typing-extensions = "^4.13.2"
-nv_one_logger_core = { path = "../one_logger_core", develop = true }
+nv-one-logger-core = {version = "^2.0.0", source = "mlwfo-staging-pypi"}
+
 
 
 [build-system]
@@ -104,3 +105,7 @@ domain = "gitlab-master.nvidia.com"
 name = "nv-shared-pypi"
 url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi/simple"
 
+[[tool.poetry.source]]
+ name = "mlwfo-staging-pypi"
+ url = "https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/simple"
+ priority = "supplemental"

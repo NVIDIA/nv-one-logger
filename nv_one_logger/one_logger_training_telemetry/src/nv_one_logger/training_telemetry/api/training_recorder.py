@@ -111,10 +111,10 @@ class _TrainingState:
     # the ones from the current job). None if unknown or unmeasured.
     completed_floating_point_operations_overall: Optional[int] = None
 
-    # The timestamp of the start of the training loop.
+    # The timestamp of the end of the first training loop that was logged.
     first_logged_train_iterations_finish_time: Optional[TracingTimestamp] = None
 
-    # The timestamp of the end of the training loop.
+    # The timestamp of the end of the latest training loop that was logged.
     last_logged_train_iterations_finish_time: Optional[TracingTimestamp] = None
 
     # The timestamp of the first successful save checkpoint.
@@ -520,6 +520,7 @@ class TrainingRecorder(DefaultRecorder):
             train_iterations_target=train_iterations_target,
             train_samples_target=train_samples_target,
             train_tokens_target=train_tokens_target,
+            completed_floating_point_operations_overall=state.completed_floating_point_operations_overall,
         )
         return self.start(
             span_name=StandardTrainingJobSpanName.TRAINING_LOOP,
@@ -630,6 +631,11 @@ class TrainingRecorder(DefaultRecorder):
                 train_throughput_per_gpu=self._training_state.tflops_per_gpu.latest_value,
                 train_throughput_per_gpu_max=self._training_state.tflops_per_gpu.max_value,
                 train_throughput_per_gpu_min=self._training_state.tflops_per_gpu.min_value,
+                first_logged_train_iterations_finish_timestamp_sec=(
+                    self._training_state.first_logged_train_iterations_finish_time.seconds_since_epoch
+                    if self._training_state.first_logged_train_iterations_finish_time
+                    else None
+                ),
             )
             self.event(training_loop_span, Event.create(name=StandardTrainingJobEventName.TRAINING_METRICS_UPDATE, attributes=attributes))
 

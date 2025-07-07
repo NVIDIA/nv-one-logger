@@ -161,10 +161,12 @@ class TestAttributes:
         """Test that get_float_value() correctly retrieves float values and handles errors."""
         attributes = Attributes()
         attributes.add("float_attr", 3.14)
+        attributes.add("round_float_attr", 5)
         attributes.add("str_attr", "not_a_float")
 
         # Test getting an existing float attribute
         assert attributes.get_float_value("float_attr") == 3.14
+        assert attributes.get_float_value("round_float_attr") == 5.0
 
         # Test getting a non-existent attribute
         assert attributes.get_float_value("nonexistent") is None

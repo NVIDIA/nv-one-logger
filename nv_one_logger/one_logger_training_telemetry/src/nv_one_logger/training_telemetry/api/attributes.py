@@ -28,6 +28,7 @@ class TrainingLoopAttributes(Attributes):
         train_iterations_target: Optional[int] = None,
         train_samples_target: Optional[int] = None,
         train_tokens_target: Optional[int] = None,
+        completed_floating_point_operations_overall: Optional[int] = None,
     ) -> "TrainingLoopAttributes":
         """Create a TrainingLoopAttributes object.
 
@@ -37,6 +38,9 @@ class TrainingLoopAttributes(Attributes):
             train_iterations_target: Target number of training iterations.
             train_samples_target: Target number of training samples.
             train_tokens_target: Target numbrer of training tokens.
+            completed_floating_point_operations_overall: Number of floating point operations completed
+                as of the beginning of training (non-zero if the job loads a checkpoint and starts from there).
+                None if unknown or unmeasured.
         """
         attributes = cls()
         assert_that(train_iterations_start is not None, "train_iterations_start is required.")
@@ -49,6 +53,8 @@ class TrainingLoopAttributes(Attributes):
             attributes.add("train_samples_target", train_samples_target)
         if train_tokens_target is not None:
             attributes.add("train_tokens_target", train_tokens_target)
+        if completed_floating_point_operations_overall is not None:
+            attributes.add("completed_floating_point_operations_overall", completed_floating_point_operations_overall)
         return attributes
 
     @property
@@ -79,6 +85,11 @@ class TrainingLoopAttributes(Attributes):
     def train_tokens_target(self) -> Optional[int]:
         """Target number of training tokens."""
         return self.get_int_value("train_tokens_target")
+
+    @property
+    def completed_floating_point_operations_overall(self) -> Optional[int]:
+        """Number of floating point operations completed as of the beginning of training (non-zero if the job loads a checkpoint and starts from there)."""
+        return self.get_int_value("completed_floating_point_operations_overall")
 
 
 class CheckpointSaveSpanAttributes(Attributes):
@@ -415,6 +426,7 @@ class TrainingMetricsUpdateAttributes(Attributes):
         train_throughput_per_gpu: Optional[float] = None,
         train_throughput_per_gpu_max: Optional[float] = None,
         train_throughput_per_gpu_min: Optional[float] = None,
+        first_logged_train_iterations_finish_timestamp_sec: Optional[float] = None,
     ) -> "TrainingMetricsUpdateAttributes":
         """Create a TrainingMetricsUpdateAttributes object.
 
@@ -448,6 +460,7 @@ class TrainingMetricsUpdateAttributes(Attributes):
             completed_floating_point_operations_overall: Number of floating point operations completed
                 so far (including the ones from the loaded checkpoint and the ones from the current job).
                 None if unknown or unmeasured.
+            total_flops: Total number of floating point operations in the current job. None if unknown or unmeasured.
             train_throughput_per_gpu: The train throughput per GPU during the current job in tflops
                 (one trillion floating point operations per second). This is the average over the job so far.
                 None if unknown or unmeasured.
@@ -459,6 +472,8 @@ class TrainingMetricsUpdateAttributes(Attributes):
                 (one trillion floating point operations per second). This value is computed as the min of the
                 per-iteration train throughput values (this is the throughput of the iteration with the
                 lowest throughput).  None if unknown or unmeasured.
+            first_logged_train_iterations_finish_timestamp_sec: The timestamp of the end of the first training
+                loop that was logged as seconds since epoch. None if unknown or unmeasured.
         """
         attributes = cls()
         assert_that(train_iterations_start is not None, "train_iterations_start is required.")
@@ -507,6 +522,8 @@ class TrainingMetricsUpdateAttributes(Attributes):
             attributes.add("train_throughput_per_gpu_max", train_throughput_per_gpu_max)
         if train_throughput_per_gpu_min is not None:
             attributes.add("train_throughput_per_gpu_min", train_throughput_per_gpu_min)
+        if first_logged_train_iterations_finish_timestamp_sec is not None:
+            attributes.add("first_logged_train_iterations_finish_timestamp_sec", first_logged_train_iterations_finish_timestamp_sec)
         return attributes
 
     @property
@@ -676,6 +693,11 @@ class TrainingMetricsUpdateAttributes(Attributes):
         None if unknown or unmeasured.
         """
         return self.get_float_value("train_throughput_per_gpu_min")
+
+    @property
+    def first_logged_train_iterations_finish_timestamp_sec(self) -> Optional[float]:
+        """The timestamp of the end of the first training loop that was logged as seconds since epoch. None if unknown or unmeasured."""
+        return self.get_float_value("first_logged_train_iterations_finish_timestamp_sec")
 
 
 class ValidationMetricsUpdateAttributes(Attributes):

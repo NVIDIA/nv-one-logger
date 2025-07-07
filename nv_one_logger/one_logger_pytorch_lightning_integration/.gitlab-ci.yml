@@ -1,0 +1,97 @@
+variables:
+  E2E_CI: 1
+  KUBERNETES_MEMORY_LIMIT: 512Mi
+  KUBERNETES_CPU_LIMIT: 500m
+
+stages:
+  - test
+  - doc
+  - build
+
+telemetry-build-prod-job:
+  stage: build
+  when: manual
+  only: 
+    - merged
+    - main
+  image: 
+    name: python:3.8
+  before_script:
+    - echo "installing poetry."
+    - pip install poetry==1.8.5 wheel
+    - echo "installing jq."
+    - apt-get -qq update
+    - apt-get install -y jq
+    - which jq
+    - poetry source add pypi
+  script:
+    - echo "setting Git token and Repo path"
+    - export GH_TOKEN=$CI_REGISTRY_USER:$CI_JOB_TOKEN
+    - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/"
+    - echo "making release"
+    - git checkout -b $CI_COMMIT_BRANCH
+    - cd nv_one_logger/one_logger_pytorch_lightning_integration
+    - make ci_release
+    - echo "making publish"
+    - make publish
+  tags:
+    - hwinfdcm
+
+telemetry-build-staging-job:
+  stage: build
+  only: 
+    - merged
+    - develop
+  image: 
+    name: python:3.8
+  before_script:
+    - echo "installing poetry."
+    - pip install poetry==1.8.5 wheel
+    - echo "installing jq."
+    - apt-get -qq update
+    - apt-get install -y jq
+    - which jq
+    - poetry source add pypi
+  script:
+    - echo "setting Git token and Repo path"
+    - export GH_TOKEN=$CI_REGISTRY_USER:$CI_JOB_TOKEN
+    - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/"
+    - echo "making release"
+    - git checkout -b $CI_COMMIT_BRANCH
+    - cd nv_one_logger/one_logger_pytorch_lightning_integration
+    - make ci_release
+    - echo "making publish"
+    - make publish
+  tags:
+    - hwinfdcm
+
+telemetry-unit-tests:
+  stage: test
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  image: 
+    name: python:3.8
+  before_script:
+  script:
+    - echo "installing poetry."
+    - pip install poetry==1.8.5 wheel
+    - cd nv_one_logger/one_logger_pytorch_lightning_integration
+    - echo "checking lint/format."
+    - make check
+    - echo "running tests..."
+    - make test # All tests will run
+  tags:
+    - hwinfdcm
+
+telemetry-pages:
+  stage: doc
+  image: python:3.8
+  script:
+    - pip install -U sphinx
+    - cd nv_one_logger/one_logger_pytorch_lightning_integration
+    - sphinx-build -b html . public
+  artifacts:
+    paths:
+      - one_logger_pytorch_lightning_integration/public
+  tags:
+    - hwinfdcm
+

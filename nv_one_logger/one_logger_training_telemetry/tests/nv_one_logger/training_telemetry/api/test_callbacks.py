@@ -589,6 +589,9 @@ def test_training_start_end_without_single_iteration_callbacks(mock_exporter: Ma
         train_iterations_target=1000,
         train_samples_target=32000,
         train_tokens_target=1024 * 32000,  # seq_length * train_samples_target
+        completed_floating_point_operations_overall=train_iterations_start
+        * 32
+        * 100,  # 10 iterations in the loaded checkpoint * 32 samples per iteration * 100 flops per sample
     )
 
     advance_time(mock_time, mock_perf_counter, 10.0)
@@ -650,6 +653,9 @@ def test_training_start_end_with_single_iteration_callbacks(
         train_iterations_target=1000,
         train_samples_target=32000,
         train_tokens_target=1024 * 32000,  # seq_length * train_samples_target
+        completed_floating_point_operations_overall=train_iterations_start
+        * 32
+        * 100,  # 10 iterations in the loaded checkpoint * 32 samples per iteration * 100 flops per sample
     )
 
     on_train_end()
@@ -687,6 +693,7 @@ def test_training_start_end_with_single_iteration_callbacks(
         train_throughput_per_gpu=32 * 100.0 / (50.0 * 10**12 * 10),
         train_throughput_per_gpu_max=32 * 100.0 / (50.0 * 10**12 * 10),
         train_throughput_per_gpu_min=32 * 100.0 / (50.0 * 10**12 * 10),
+        first_logged_train_iterations_finish_timestamp_sec=STARTING_TIME + 10 + 50,
     )
     expected_ev_attributes.add(StandardEventAttributeName.TIMESTAMP_MSEC, (STARTING_TIME + 10 + 50 * 7) * 1000)
     assert event.attributes == expected_ev_attributes

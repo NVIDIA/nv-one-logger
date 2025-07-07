@@ -216,10 +216,11 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
     assert span.name == StandardTrainingJobSpanName.TRAINING_LOOP
     assert span.attributes == TrainingLoopAttributes.create(
         train_iterations_start=train_iterations_start,
-        train_samples_start=3200,
         train_iterations_target=1000,
+        train_samples_start=3200,
         train_samples_target=32000,
         train_tokens_target=32000 * 1024,  # train_samples_target * seq_length
+        completed_floating_point_operations_overall=320000,  # 10 iterations in the loaded checkpoint * 32 samples per iteration * 100 flops per sample
     )
     assert_only_start_event(span)
     assert span.start_event.attributes == Attributes({StandardEventAttributeName.TIMESTAMP_MSEC: _cur_ts(mock_time)})
@@ -285,6 +286,7 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
                 train_throughput_per_gpu=expected_train_throughput_per_gpu,
                 train_throughput_per_gpu_max=expected_train_throughput_per_gpu_max,
                 train_throughput_per_gpu_min=expected_train_throughput_per_gpu_min,
+                first_logged_train_iterations_finish_timestamp_sec=expected_first_iter_finish_ts.seconds_since_epoch,
             ).add(StandardEventAttributeName.TIMESTAMP_MSEC, _cur_ts(mock_time))
         else:
             assert len(mock_exporter.mock_calls) == prev_export_count, "Exporter was called unnecessarily for TRAINING_SINGLE_ITERATION"

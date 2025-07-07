@@ -104,9 +104,10 @@ def test_training_context(mock_exporter: MagicMock, mock_perf_counter: Mock, moc
     span = span_from_export_start(mock_exporter, expected_parent=None)
     assert span.name == StandardTrainingJobSpanName.TRAINING_LOOP
     expected_attributes: Dict[str, AttributeValue] = {
-        "train_iterations_start": 0,  # train_iterations_start,
-        "train_samples_start": 0,
+        "completed_floating_point_operations_overall": 0,
+        "train_iterations_start": 0,
         "train_iterations_target": 1000,
+        "train_samples_start": 0,
         "train_samples_target": 32000,  # train_iterations_target * config.global_batch_size
         StandardSpanAttributeName.DURATION_MSEC: 700000,
     }

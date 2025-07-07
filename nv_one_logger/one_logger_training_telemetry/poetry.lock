@@ -454,16 +454,19 @@ reference = "nv-shared-pypi"
 
 [[package]]
 name = "exceptiongroup"
-version = "1.2.2"
+version = "1.3.0"
 description = "Backport of PEP 654 (exception groups)"
 optional = false
 python-versions = ">=3.7"
 groups = ["dev"]
 markers = "python_version < \"3.11\""
 files = [
-    {file = "exceptiongroup-1.2.2-py3-none-any.whl", hash = "sha256:3111b9d131c238bec2f8f516e123e14ba243563fb135d3fe885990585aa7795b"},
-    {file = "exceptiongroup-1.2.2.tar.gz", hash = "sha256:47c2edf7c6738fafb49fd34290706d1a1a2f4d1c6df275526b62cbb4aa5393cc"},
+    {file = "exceptiongroup-1.3.0-py3-none-any.whl", hash = "sha256:4d111e6e0c13d0644cad6ddaa7ed0261a0b36971f6d23e7ec9b4b9097da78a10"},
+    {file = "exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88"},
 ]
+
+[package.dependencies]
+typing-extensions = {version = ">=4.6.0", markers = "python_version < \"3.13\""}
 
 [package.extras]
 test = ["pytest (>=6)"]
@@ -1000,19 +1003,22 @@ name = "nv-one-logger-core"
 version = "2.0.0"
 description = "Extensions to onelogger library to use Open telemetry (OTEL) as a backend."
 optional = false
-python-versions = "^3.8"
+python-versions = ">=3.8,<4.0"
 groups = ["main"]
-files = []
-develop = true
+files = [
+    {file = "nv_one_logger_core-2.0.0-py3-none-any.whl", hash = "sha256:940da1e9ae0fba546e41ac3de0e692b15b865e5b52f7c0e9b3424bc7f7b62be0"},
+    {file = "nv_one_logger_core-2.0.0.tar.gz", hash = "sha256:df4dd9f3d482216ed68276138081e96a49d54dd9b12f713a698c08ea6c9cdb9b"},
+]
 
 [package.dependencies]
-StrEnum = "^0.4.0"
-toml = "^0.10.2"
-typing-extensions = "^4.13.2"
+StrEnum = ">=0.4.0,<0.5.0"
+toml = ">=0.10.2,<0.11.0"
+typing-extensions = ">=4.13.2,<5.0.0"
 
 [package.source]
-type = "directory"
-url = "../one_logger_core"
+type = "legacy"
+url = "https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/simple"
+reference = "mlwfo-staging-pypi"
 
 [[package]]
 name = "overrides"
@@ -1646,14 +1652,14 @@ reference = "nv-shared-pypi"
 
 [[package]]
 name = "snowballstemmer"
-version = "2.2.0"
-description = "This package provides 29 stemmers for 28 languages generated from Snowball algorithms."
+version = "3.0.1"
+description = "This package provides 32 stemmers for 30 languages generated from Snowball algorithms."
 optional = false
-python-versions = "*"
+python-versions = "!=3.0.*, !=3.1.*, !=3.2.*"
 groups = ["dev"]
 files = [
-    {file = "snowballstemmer-2.2.0-py2.py3-none-any.whl", hash = "sha256:c8e1716e83cc398ae16824e5572ae04e0d9fc2c6b985fb0f900f5f0c96ecba1a"},
-    {file = "snowballstemmer-2.2.0.tar.gz", hash = "sha256:09b16deb8547d3412ad7b590689584cd0fe25ec8db3be37788be3810cbf19cb1"},
+    {file = "snowballstemmer-3.0.1-py3-none-any.whl", hash = "sha256:6cd7b3897da8d6c9ffb968a6781fa6532dce9c3618a4b127d920dab764a19064"},
+    {file = "snowballstemmer-3.0.1.tar.gz", hash = "sha256:6d5eeeec8e9f84d4d56b847692bacf79bc2c8e90c7f80ca4444ff8b6f2e52895"},
 ]
 
 [package.source]
@@ -1807,14 +1813,14 @@ reference = "nv-shared-pypi"
 
 [[package]]
 name = "virtualenv"
-version = "20.30.0"
+version = "20.31.2"
 description = "Virtual Python Environment builder"
 optional = false
 python-versions = ">=3.8"
 groups = ["dev"]
 files = [
-    {file = "virtualenv-20.30.0-py3-none-any.whl", hash = "sha256:e34302959180fca3af42d1800df014b35019490b119eba981af27f2fa486e5d6"},
-    {file = "virtualenv-20.30.0.tar.gz", hash = "sha256:800863162bcaa5450a6e4d721049730e7f2dae07720e0902b0e4040bd6f9ada8"},
+    {file = "virtualenv-20.31.2-py3-none-any.whl", hash = "sha256:36efd0d9650ee985f0cad72065001e66d49a6f24eb44d98980f630686243cf11"},
+    {file = "virtualenv-20.31.2.tar.gz", hash = "sha256:e10c0a9d02835e592521be48b332b6caee6887f332c111aa79a09b9e79efc2af"},
 ]
 
 [package.dependencies]
@@ -1954,4 +1960,4 @@ reference = "nv-shared-pypi"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.8"
-content-hash = "e14f7b16e854bd57203e2f99f38fb835f4cdd4172120c44f4ed2e17f12bd5b84"
+content-hash = "e8cfad21501a331396848aeeac7338cb46068256436b69f3043280852c651e99"

@@ -1,4 +1,3 @@
 # Warning
 
-Do not add an __init.py__ to this directorty. `onelogger.otel` is a namespace package.
-This allows us to allow more than one project to contain code for packages that start with `onelogger.otel`.
+Do not add an **init.py** to this directorty. `nv_one_logger.otel` is a namespace package. This makes it possible to have multiple Python projects that define subpackages and code under the package `nv_one_logger.otel`.

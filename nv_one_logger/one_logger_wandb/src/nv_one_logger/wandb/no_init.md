@@ -1,4 +1,3 @@
 # Warning
 
-Do not add an __init.py__ to this directorty. `onelogger.wandb` is a namespace package.
-This allows us to allow more than one project to contain code for packages that start with `onelogger.wandb`.
+Do not add an **init.py** to this directorty. `nv_one_logger.wandb` is a namespace package. This makes it possible to have multiple Python projects that define subpackages and code under the package `nv_one_logger.wandb`.

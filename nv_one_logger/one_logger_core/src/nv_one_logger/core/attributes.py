@@ -163,7 +163,7 @@ class Attributes(Dict[str, Attribute]):
         if attribute_name not in self.keys():
             return None
         val = self[attribute_name].value
-        assert_that(isinstance(val, float), f"Attribute {attribute_name} must be a float. Got {val}.")
+        assert_that(isinstance(val, float) or isinstance(val, int), f"Attribute {attribute_name} must be a float. Got {val}.")
         return cast(float, val)
 
     def get_str_value(self, attribute_name: str) -> Optional[str]:

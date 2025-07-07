@@ -19,6 +19,9 @@ class TrainingTelemetryConfig(OneLoggerConfig):
     # If there is no reasonable default value for a field, we can use a dummy default and then
     # reject it in the __post_init__ method (see "world_size" and "global_batch_size" below).
 
+    # This field is inhertied from the base class but has a default value in this subclass.
+    app_type_or_fn: Union[ApplicationType, str, Callable[[], Union[str, ApplicationType]]] = ApplicationType.TRAINING
+
     # Number (or callable to get number) of processes participating in the training.
     world_size_or_fn: Union[int, Callable[[], int]] = 0
 
@@ -34,14 +37,6 @@ class TrainingTelemetryConfig(OneLoggerConfig):
     def global_batch_size(self) -> int:
         """Global batch size."""
         return evaluate_value(self.global_batch_size_or_fn)
-
-    # Type (or callable to return type) of the application run (e.g., training, validation)
-    app_type_or_fn: Union[Union[str, ApplicationType], Callable[[], Union[str, ApplicationType]]] = ApplicationType.TRAINING
-
-    @property
-    def app_type(self) -> Union[str, ApplicationType]:
-        """Type of the application run."""
-        return evaluate_value(self.app_type_or_fn)
 
     # Whether to enable logging for the current rank in distributed training.
     enable_for_current_rank: bool = False

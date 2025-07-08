@@ -1,7 +1,7 @@
 variables:
   E2E_CI: 1
-  KUBERNETES_MEMORY_LIMIT: 512Mi
-  KUBERNETES_CPU_LIMIT: 500m
+  KUBERNETES_MEMORY_LIMIT: 2048Mi
+  KUBERNETES_CPU_LIMIT: 1000m
 
 stages:
   - test
@@ -35,7 +35,7 @@ otel-build-prod-job:
     - echo "making publish"
     - make publish
   tags:
-    - hwinfdcm
+    - hwinf-mlwfo  # Use runners with this tag
 
 build-staging-job:
   stage: build
@@ -63,7 +63,7 @@ build-staging-job:
     - echo "making publish"
     - make publish
   tags:
-    - hwinfdcm
+    - hwinf-mlwfo  # Use runners with this tag
 
 otel-unit-tests:
   stage: test
@@ -80,7 +80,7 @@ otel-unit-tests:
     - echo "running tests..."
     - make test # All tests will run
   tags:
-    - hwinfdcm
+    - hwinf-mlwfo  # Use runners with this tag
 
 otel-pages:
   stage: doc
@@ -93,5 +93,5 @@ otel-pages:
     paths:
       - one_logger_otel/public
   tags:
-    - hwinfdcm
+    - hwinf-mlwfo  # Use runners with this tag
 

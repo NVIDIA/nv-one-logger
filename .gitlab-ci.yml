@@ -25,3 +25,8 @@ include:
   #   #   - changes:
   #   #     - 'one_logger_core/*'
   #   #     - 'one_logger_wandb/*'
+  - local: 'nv_one_logger/one_logger_pytorch_lightning_integration/.gitlab-ci.yml'
+  #   # rules:
+  #   #   - changes:
+  #   #     - 'one_logger_core/*'
+  #   #     - 'one_logger_pytorch_lightning_integration/*'

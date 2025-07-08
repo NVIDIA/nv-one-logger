@@ -1,7 +1,7 @@
 variables:
   E2E_CI: 1
-  KUBERNETES_MEMORY_LIMIT: 512Mi
-  KUBERNETES_CPU_LIMIT: 500m
+  KUBERNETES_MEMORY_LIMIT: 2048Mi
+  KUBERNETES_CPU_LIMIT: 1000m
 
 stages:
   - build
@@ -35,7 +35,7 @@ core-build-prod-job:
     - echo "making publish"
     - make publish
   tags:
-    - hwinfdcm
+    - hwinf-mlwfo  # Use runners with this tag
 
 core-build-staging-job:
   stage: build
@@ -63,7 +63,7 @@ core-build-staging-job:
     - echo "making publish"
     - make publish
   tags:
-    - hwinfdcm
+    - hwinf-mlwfo  # Use runners with this tag
 
 core-unit-tests:
   stage: test
@@ -80,7 +80,7 @@ core-unit-tests:
     - echo "running tests..."
     - make test # All tests will run
   tags:
-    - hwinfdcm
+    - hwinf-mlwfo  # Use runners with this tag
 
 core-pages:
   stage: doc
@@ -93,5 +93,5 @@ core-pages:
     paths:
       - one_logger_core/public
   tags:
-    - hwinfdcm
+    - hwinf-mlwfo  # Use runners with this tag
 

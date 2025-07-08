@@ -4,12 +4,13 @@ variables:
   KUBERNETES_CPU_LIMIT: 1000m
 
 stages:
-  - build
   - test
   - doc
+  - build_deploy
 
 core-build-prod-job:
-  stage: build
+  stage: build_deploy
+  needs: [core-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
   when: manual
   only: 
     - merged
@@ -23,6 +24,7 @@ core-build-prod-job:
     - apt-get -qq update
     - apt-get install -y jq
     - which jq
+    - cd nv_one_logger/one_logger_core
     - poetry source add pypi
   script:
     - echo "setting Git token and Repo path"
@@ -30,7 +32,6 @@ core-build-prod-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - cd nv_one_logger/one_logger_core 
     - make ci_release
     - echo "making publish"
     - make publish
@@ -38,7 +39,8 @@ core-build-prod-job:
     - hwinf-mlwfo  # Use runners with this tag
 
 core-build-staging-job:
-  stage: build
+  stage: build_deploy
+  needs: [core-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   only: 
     - merged
     - develop
@@ -51,6 +53,7 @@ core-build-staging-job:
     - apt-get -qq update
     - apt-get install -y jq
     - which jq
+    - cd nv_one_logger/one_logger_core
     - poetry source add pypi
   script:
     - echo "setting Git token and Repo path"
@@ -58,7 +61,6 @@ core-build-staging-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - cd nv_one_logger/one_logger_core 
     - make ci_release
     - echo "making publish"
     - make publish
@@ -84,6 +86,7 @@ core-unit-tests:
 
 core-pages:
   stage: doc
+  needs: [core-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   image: python:3.8
   script:
     - pip install -U sphinx

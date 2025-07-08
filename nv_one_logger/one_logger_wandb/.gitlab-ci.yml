@@ -6,10 +6,11 @@ variables:
 stages:
   - test
   - doc
-  - build
+  - build_deploy
 
 wandb-build-prod-job:
-  stage: build
+  stage: build_deploy
+  needs: [wandb-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
   when: manual
   only: 
     - merged
@@ -23,6 +24,7 @@ wandb-build-prod-job:
     - apt-get -qq update
     - apt-get install -y jq
     - which jq
+    - cd nv_one_logger/one_logger_wandb
     - poetry source add pypi
   script:
     - echo "setting Git token and Repo path"
@@ -37,7 +39,8 @@ wandb-build-prod-job:
     - hwinf-mlwfo  # Use runners with this tag
 
 wandb-build-staging-job:
-  stage: build
+  stage: build_deploy
+  needs: [wandb-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   only: 
     - merged
     - develop
@@ -50,6 +53,7 @@ wandb-build-staging-job:
     - apt-get -qq update
     - apt-get install -y jq
     - which jq
+    - cd nv_one_logger/one_logger_wandb
     - poetry source add pypi
   script:
     - echo "setting Git token and Repo path"
@@ -57,7 +61,6 @@ wandb-build-staging-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - cd nv_one_logger/one_logger_wandb
     - make ci_release
     - echo "making publish"
     - make publish
@@ -83,6 +86,7 @@ wandb-unit-tests:
 
 wandb-pages:
   stage: doc
+  needs: [wandb-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   image: python:3.8
   script:
     - pip install -U sphinx

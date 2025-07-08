@@ -6,10 +6,11 @@ variables:
 stages:
   - test
   - doc
-  - build
+  - build_deploy
 
 otel-build-prod-job:
-  stage: build
+  stage: build_deploy
+  needs: [otel-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
   when: manual
   only: 
     - merged
@@ -23,6 +24,7 @@ otel-build-prod-job:
     - apt-get -qq update
     - apt-get install -y jq
     - which jq
+    - cd nv_one_logger/one_logger_otel
     - poetry source add pypi
   script:
     - echo "setting Git token and Repo path"
@@ -30,15 +32,15 @@ otel-build-prod-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - cd nv_one_logger/one_logger_otel
     - make ci_release
     - echo "making publish"
     - make publish
   tags:
     - hwinf-mlwfo  # Use runners with this tag
 
-build-staging-job:
-  stage: build
+otel-build-staging-job:
+  stage: build_deploy
+  needs: [otel-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   only: 
     - merged
     - develop
@@ -51,6 +53,7 @@ build-staging-job:
     - apt-get -qq update
     - apt-get install -y jq
     - which jq
+    - cd nv_one_logger/one_logger_otel
     - poetry source add pypi
   script:
     - echo "setting Git token and Repo path"
@@ -58,7 +61,6 @@ build-staging-job:
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/"
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - cd nv_one_logger/one_logger_otel
     - make ci_release
     - echo "making publish"
     - make publish
@@ -84,6 +86,7 @@ otel-unit-tests:
 
 otel-pages:
   stage: doc
+  needs: [otel-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   image: python:3.8
   script:
     - pip install -U sphinx

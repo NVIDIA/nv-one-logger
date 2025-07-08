@@ -2,7 +2,7 @@
 stages:
   - test
   - doc
-  - build
+  - build_deploy
 
 
 include:

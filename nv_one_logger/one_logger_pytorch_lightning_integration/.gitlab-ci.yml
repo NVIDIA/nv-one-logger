@@ -8,9 +8,9 @@ stages:
   - doc
   - build_deploy
 
-telemetry-build-prod-job:
+ptl-int-build-prod-job:
   stage: build_deploy
-  needs: [telemetry-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
+  needs: [ptl-int-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
   when: manual
   only: 
     - merged
@@ -38,9 +38,9 @@ telemetry-build-prod-job:
   tags:
     - hwinf-mlwfo  # Use runners with this tag
 
-telemetry-build-staging-job:
+ptl-int-build-staging-job:
   stage: build_deploy
-  needs: [telemetry-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
+  needs: [ptl-int-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   only: 
     - merged
     - develop
@@ -67,7 +67,7 @@ telemetry-build-staging-job:
   tags:
     - hwinf-mlwfo  # Use runners with this tag
 
-telemetry-unit-tests:
+ptl-int-unit-tests:
   stage: test
   coverage: '/TOTAL.*\s+(\d+%)$/'
   image: 
@@ -84,9 +84,9 @@ telemetry-unit-tests:
   tags:
     - hwinf-mlwfo  # Use runners with this tag
 
-telemetry-pages:
+ptl-int-pages:
   stage: doc
-  needs: [telemetry-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
+  needs: [ptl-int-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   image: python:3.8
   script:
     - pip install -U sphinx

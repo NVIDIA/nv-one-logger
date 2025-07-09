@@ -367,6 +367,11 @@ class V1CompatibleWandbExporterAdapter:
         metrics_to_log = _build_metrics(
             [
                 _MetricMapping("first_saved_train_iterations_start_time", attributes.training_start_timestamp_sec, coefficient=1000),
+                _MetricMapping("train_iterations_productive_end", attributes.productive_train_iterations),
+                _MetricMapping("train_samples_productive_end", attributes.productive_train_samples),
+                _MetricMapping("train_tflop_productive_end", attributes.productive_train_tflops),
+                _MetricMapping("train_iterations_time_total_productive", attributes.productive_train_iterations_sec),
+                _MetricMapping("validation_iterations_time_total_productive", attributes.productive_validation_iterations_sec),
             ]
         )
         if self._training_telemetry_config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
@@ -411,6 +416,7 @@ class V1CompatibleWandbExporterAdapter:
         metrics_to_log = _build_metrics(
             [
                 _MetricMapping("save_checkpoint_sync_time_total", attributes.save_checkpoint_sync_time_total_sec),
+                _MetricMapping("save_checkpoint_sync_time_total_productive", attributes.save_checkpoint_sync_time_total_sec),
                 _MetricMapping("save_checkpoint_sync_time_min", attributes.save_checkpoint_sync_time_min_sec),
                 _MetricMapping("save_checkpoint_sync_time_max", attributes.save_checkpoint_sync_time_max_sec),
             ]

@@ -522,10 +522,14 @@ class TestV1CompatibleWandbExporterAdapter:
         checkpoint_save_span.add_event(success_event)
         metrics = adapter.extract_v1_metrics_for_event(event=success_event, span=checkpoint_save_span)
         assert metrics == {
+            "save_checkpoint_sync_count": 3,
             "first_successful_save_checkpoint_sync_finish_time": 222_000_000,
             "last_successful_save_checkpoint_sync_finish_time": 230_000_000,
             "first_saved_train_iterations_start_time": 5_000_000,
-            "save_checkpoint_sync_count": 3,
+            "train_iterations_productive_end": 20,
+            "train_samples_productive_end": 200,
+            "train_iterations_time_total_productive": 40000.0,
+            "validation_iterations_time_total_productive": 10000.0,
         }
         metrics_update_event = Event.create(
             name=StandardTrainingJobEventName.SYNC_CHECKPOINT_METRICS_UPDATE,
@@ -539,6 +543,7 @@ class TestV1CompatibleWandbExporterAdapter:
         metrics = adapter.extract_v1_metrics_for_event(event=metrics_update_event, span=checkpoint_save_span)
         assert metrics == {
             "save_checkpoint_sync_time_total": 550,
+            "save_checkpoint_sync_time_total_productive": 550.0,
             "save_checkpoint_sync_time_min": 20,
             "save_checkpoint_sync_time_max": 120,
         }
@@ -594,6 +599,10 @@ class TestV1CompatibleWandbExporterAdapter:
             "last_successful_save_checkpoint_sync_finish_time": 230_000_000,
             "first_saved_train_iterations_start_time": 5_000_000,
             "save_checkpoint_sync_count": 3,
+            "train_iterations_productive_end": 20,
+            "train_samples_productive_end": 200,
+            "train_iterations_time_total_productive": 40000.0,
+            "validation_iterations_time_total_productive": 10000.0,
         }
         advance_time(mock_time, mock_perf_counter, 10)
         checkpoint_save_span.stop()

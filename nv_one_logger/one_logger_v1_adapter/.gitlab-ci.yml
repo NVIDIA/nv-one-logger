@@ -1,0 +1,100 @@
+variables:
+  E2E_CI: 1
+  KUBERNETES_MEMORY_LIMIT: 2048Mi
+  KUBERNETES_CPU_LIMIT: 1000m
+
+stages:
+  - test
+  - doc
+  - build_deploy
+
+v1-adapter-build-prod-job:
+  stage: build_deploy
+  needs: [v1-adapter-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
+  when: manual
+  only: 
+    - merged
+    - main
+  image: 
+    name: python:3.8
+  before_script:
+    - echo "installing poetry."
+    - pip install poetry==1.8.5 wheel
+    - echo "installing jq."
+    - apt-get -qq update
+    - apt-get install -y jq
+    - which jq
+    - cd nv_one_logger/one_logger_v1_adapter
+    - poetry source add pypi
+  script:
+    - echo "setting Git token and Repo path"
+    - export GH_TOKEN=$CI_REGISTRY_USER:$CI_JOB_TOKEN
+    - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/"
+    - echo "making release"
+    - git checkout -b $CI_COMMIT_BRANCH
+    - make ci_release
+    - echo "making publish"
+    - make publish
+  tags:
+    - hwinf-mlwfo  # Use runners with this tag
+
+v1-adapter-build-staging-job:
+  stage: build_deploy
+  needs: [v1-adapter-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
+  only: 
+    - merged
+    - develop
+  image: 
+    name: python:3.8
+  before_script:
+    - echo "installing poetry."
+    - pip install poetry==1.8.5 wheel
+    - echo "installing jq."
+    - apt-get -qq update
+    - apt-get install -y jq
+    - which jq
+    - cd nv_one_logger/one_logger_v1_adapter
+    - poetry source add pypi
+  script:
+    - echo "setting Git token and Repo path"
+    - export GH_TOKEN=$CI_REGISTRY_USER:$CI_JOB_TOKEN
+    - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/"
+    - echo "making release"
+    - git checkout -b $CI_COMMIT_BRANCH
+    - make ci_release
+    - echo "making publish"
+    - make publish
+  tags:
+    - hwinf-mlwfo  # Use runners with this tag
+
+v1-adapter-unit-tests:
+  stage: test
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  image: 
+    name: python:3.8
+  before_script:
+  script:
+    - echo "installing poetry."
+    - pip install poetry==1.8.5 wheel
+    - cd nv_one_logger/one_logger_v1_adapter
+    - echo "checking lint/format."
+    - make check
+    - echo "running tests..."
+    - make test # All tests will run
+  tags:
+    - hwinf-mlwfo  # Use runners with this tag
+
+v1-adapter-pages:
+  stage: doc
+  needs: [v1-adapter-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
+  image: python:3.8
+  script:
+    - pip install -U sphinx
+    - cd nv_one_logger/one_logger_v1_adapter
+    - sphinx-build -b html . public
+  artifacts:
+    paths:
+      - one_logger_v1_adapter/public
+  tags:
+    - hwinf-mlwfo  # Use runners with this tag
+

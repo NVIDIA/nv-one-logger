@@ -2,17 +2,16 @@
 """Unit tests for the callbacks module."""
 
 import socket
-from ast import Dict
-from typing import Union
+from typing import Dict, Union
 from unittest.mock import MagicMock, Mock
 
 import pytest
+from nv_one_logger.api.config import ApplicationType
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.attributes import Attributes, AttributeValue
 from nv_one_logger.core.event import StandardEventAttributeName
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.span import StandardSpanAttributeName, StandardSpanName
-from nv_one_logger.core.time import TracingTimestamp
 from nv_one_logger.exporter.exporter import Exporter
 
 from nv_one_logger.training_telemetry.api.attributes import (
@@ -50,11 +49,12 @@ from nv_one_logger.training_telemetry.api.callbacks import (
     on_validation_start,
 )
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import ApplicationType, TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
+from .conftest import configure_provider_for_test
 from .utils import (
     advance_time,
     all_events_from_export_event,
@@ -72,11 +72,7 @@ from .utils import (
 @pytest.fixture(autouse=True)
 def configure_provider(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
     """Fixture that configures the TrainingTelemetryProvider."""
-    # Reset the state of the singletons
-
-    OneLoggerProvider.instance()._config = None  #
-    OneLoggerProvider.instance()._recorder = None
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    configure_provider_for_test(config, mock_exporter)
 
 
 STARTING_PERF_COUNTER = 5000.0
@@ -130,7 +126,7 @@ def test_app_lifecycle_callbacks(
     expected_attributes: Dict[str, AttributeValue] = {
         StandardEventAttributeName.TIMESTAMP_MSEC: start_time_msec if start_time_msec is not None else STARTING_TIME * 1000,
         "one_logger_training_telemetry_version": "2.0.0",
-        "enable_for_current_rank": False,
+        "enable_for_current_rank": True,
         "perf_tag": "test_perf",
         "session_tag": "test_session",
         "app_type": ApplicationType.TRAINING,
@@ -422,14 +418,18 @@ def test_save_sync_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_coun
     """Test that save sync checkpoint callbacks create and stop the appropriate spans and events."""
     config.save_checkpoint_strategy = CheckPointStrategy.SYNC
     global_step = 100
-    first_logged_train_iterations_finish_time = TracingTimestamp.for_timestamp(STARTING_TIME - 10000, validate_timestamp=False)
-    TrainingTelemetryProvider.instance().recorder._training_state.first_logged_train_iterations_finish_time = first_logged_train_iterations_finish_time
+    train_span = on_train_start(
+        train_iterations_start=0,
+        train_samples_start=0,
+        train_iterations_target_or_fn=_dummy_train_iterations_target_fn,
+        train_samples_target_or_fn=_dummy_train_samples_target_fn,
+    )
 
     on_save_checkpoint_start(global_step)
 
     # Verify span start
-    assert mock_exporter.export_start.call_count == 1
-    span = span_from_export_start(mock_exporter, None)
+    assert mock_exporter.export_start.call_count == 2
+    span = span_from_export_start(mock_exporter, train_span)
     assert span.name == StandardTrainingJobSpanName.CHECKPOINT_SAVE_SYNC
     assert span.attributes == CheckpointSaveSpanAttributes.create(CheckPointStrategy.SYNC, global_step, 1)
 
@@ -458,11 +458,17 @@ def test_save_sync_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_coun
     expected_ev1_attributes = SaveCheckpointSuccessEventAttributes.create(
         checkpoint_strategy=CheckPointStrategy.SYNC,
         current_iteration=global_step,
-        training_start_timestamp_sec=first_logged_train_iterations_finish_time.seconds_since_epoch,
         first_successful_save_checkpoint_timestamp_sec=STARTING_TIME + 10,
         latest_successful_save_checkpoint_timestamp_sec=STARTING_TIME + 10,
         save_checkpoint_success_count=1,
+        productive_train_iterations=0,
+        productive_train_samples=0,
+        productive_train_iterations_sec=0,
+        productive_validation_iterations_sec=0,
+        productive_train_tflops=0,
+        training_start_timestamp_sec=STARTING_TIME,
     ).add(StandardEventAttributeName.TIMESTAMP_MSEC, (STARTING_TIME + 10) * 1000)
+
     assert ckpt_success_event.attributes == expected_ev1_attributes
 
     ckpt_sync_metrics_update_event = events[1]
@@ -476,13 +482,22 @@ def test_save_sync_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_coun
     ).add(StandardEventAttributeName.TIMESTAMP_MSEC, (STARTING_TIME + 10) * 1000)
     assert ckpt_sync_metrics_update_event.attributes == expected_ev2_attributes
 
+    advance_time(mock_time, mock_perf_counter, 500.0)
+    span = span_from_export_stop(mock_exporter)
+    on_train_end()
+    assert mock_exporter.export_stop.call_count == 2
+    span = span_from_export_stop(mock_exporter)
+    assert span == train_span
+
     assert_exporter_method_call_sequence(
         mock_exporter,
         [
             Exporter.initialize,
             Exporter.export_start,
+            Exporter.export_start,
             Exporter.export_event,
             Exporter.export_event,
+            Exporter.export_stop,
             Exporter.export_stop,
         ],
     )
@@ -531,6 +546,12 @@ def test_save_async_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_cou
         first_successful_save_checkpoint_timestamp_sec=STARTING_TIME + 30,
         latest_successful_save_checkpoint_timestamp_sec=STARTING_TIME + 30,
         save_checkpoint_success_count=1,
+        productive_train_iterations=0,
+        productive_train_samples=0,
+        productive_train_iterations_sec=0,
+        productive_validation_iterations_sec=0,
+        productive_train_tflops=0,
+        training_start_timestamp_sec=STARTING_TIME,
     )
     expected_ev_attributes.add(StandardEventAttributeName.TIMESTAMP_MSEC, (STARTING_TIME + 30) * 1000)
     assert checkpoint_success_event.attributes == expected_ev_attributes
@@ -623,6 +644,8 @@ def test_training_start_end_with_single_iteration_callbacks(
     config.global_batch_size_or_fn = 32
     config.world_size_or_fn = 10
 
+    expected_first_logged_train_iterations_finish_timestamp_sec = 0
+
     # global step starts from 0. So this means that 10 iterations have been completed in a previous run.
     # So the first iteration of the current run is iteration # 10.
     train_iterations_start = 10
@@ -636,12 +659,14 @@ def test_training_start_end_with_single_iteration_callbacks(
         train_iterations_target_or_fn=_dummy_train_iterations_target_fn,
         train_samples_target_or_fn=_dummy_train_samples_target_fn,
     )
-    advance_time(mock_time, mock_perf_counter, 10.0)
+    ts = advance_time(mock_time, mock_perf_counter, 10.0)
 
-    for _ in range(10):
+    for i in range(10):
         on_training_single_iteration_start()
-        advance_time(mock_time, mock_perf_counter, 50.0)
+        ts = advance_time(mock_time, mock_perf_counter, 50.0)
         on_training_single_iteration_end()
+        if i == 0:
+            expected_first_logged_train_iterations_finish_timestamp_sec = ts.seconds_since_epoch
 
     # Verify span start
     assert mock_exporter.export_start.call_count == 1
@@ -674,28 +699,32 @@ def test_training_start_end_with_single_iteration_callbacks(
     assert span_events[0] == event
 
     # We update the metrics every 8 iterations. Since we start from iteration 10, the event
-    # is fired at iteration number 16, which means after completing 7 iterations.
+    # is fired at iteration number 15 (because we add 1 to the iteration number before deciding
+    # when to send the metrics), which means after completing 6 iterations.
     expected_ev_attributes = TrainingMetricsUpdateAttributes.create(
         train_iterations_start=train_iterations_start,
-        current_iteration=16,
-        num_iterations=7,
+        current_iteration=15,
+        num_iterations=6,
         train_samples_start=train_samples_start,
-        num_train_samples=7 * 32,
+        num_train_samples=6 * 32,
         interval=8,
         avg_iteration_time_sec=50.0,
         min_iteration_time_sec=50.0,
         max_iteration_time_sec=50.0,
-        total_iteration_time_sec=50.0 * 7,
-        train_tokens=1024 * 7 * 32,
-        # 10 iterations in the previous run (iterations 0 upto and incl 9 and 7 iterations in the current job)
-        completed_floating_point_operations_overall=(10 + 7) * 32 * 100,
-        total_flops=32 * 100 * 7,
+        total_iteration_time_sec=50.0 * 6,
+        train_tokens=1024 * 6 * 32,
+        # 10 iterations in the previous run (iterations 0 upto and incl 9) and 6 iterations in the current job.
+        completed_floating_point_operations_overall=(10 + 6) * 32 * 100,
+        total_flops=32 * 100 * 6,
         train_throughput_per_gpu=32 * 100.0 / (50.0 * 10**12 * 10),
         train_throughput_per_gpu_max=32 * 100.0 / (50.0 * 10**12 * 10),
         train_throughput_per_gpu_min=32 * 100.0 / (50.0 * 10**12 * 10),
-        first_logged_train_iterations_finish_timestamp_sec=STARTING_TIME + 10 + 50,
+        first_logged_train_iterations_finish_timestamp_sec=expected_first_logged_train_iterations_finish_timestamp_sec,
+        # first_logged_train_iterations_finish_timestamp_sec was captured at the end of the first iteration and
+        # last_logged_train_iterations_finish_timestamp_sec was captured at the end of the 6th iteration.
+        last_logged_train_iterations_finish_timestamp_sec=expected_first_logged_train_iterations_finish_timestamp_sec + 50 * 5,
     )
-    expected_ev_attributes.add(StandardEventAttributeName.TIMESTAMP_MSEC, (STARTING_TIME + 10 + 50 * 7) * 1000)
+    expected_ev_attributes.add(StandardEventAttributeName.TIMESTAMP_MSEC, (STARTING_TIME + 10 + 50 * 6) * 1000)
     assert event.attributes == expected_ev_attributes
 
     assert_exporter_method_call_sequence(
@@ -990,3 +1019,37 @@ def test_optimizer_init_callbacks(
             Exporter.export_stop,
         ],
     )
+
+
+def test_disabled_for_current_rank(config: TrainingTelemetryConfig, mock_exporter: MagicMock) -> None:
+    """Test that the training telemetry is disabled for the current rank."""
+    config.enable_for_current_rank = False
+    OneLoggerProvider.instance()._config = None  # type: ignore[protected-access]
+    OneLoggerProvider.instance()._recorder = None  # type: ignore[protected-access]
+    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+
+    # Try a few callbacks to make sure the provider is disabled.
+    assert on_app_start() is None
+    assert on_model_init_start() is None
+    assert on_model_init_end() is None
+    assert on_dataloader_init_start() is None
+    assert on_dataloader_init_end() is None
+    assert on_load_checkpoint_start() is None
+    assert on_load_checkpoint_end() is None
+    assert on_optimizer_init_start() is None
+    assert on_optimizer_init_end() is None
+    assert on_train_start() is None
+    assert on_train_end() is None
+    assert on_validation_start() is None
+    assert on_validation_end() is None
+    assert on_testing_start() is None
+    assert on_testing_end() is None
+    assert on_save_checkpoint_start() is None
+    assert on_save_checkpoint_success() is None
+    assert on_save_checkpoint_end() is None
+    assert on_app_end() is None
+
+    mock_exporter.assert_not_called()
+
+    # Undo the force disable logging so that other tests don't fail.
+    OneLoggerProvider.instance()._logging_force_disabled = False

@@ -427,6 +427,7 @@ class TrainingMetricsUpdateAttributes(Attributes):
         train_throughput_per_gpu_max: Optional[float] = None,
         train_throughput_per_gpu_min: Optional[float] = None,
         first_logged_train_iterations_finish_timestamp_sec: Optional[float] = None,
+        last_logged_train_iterations_finish_timestamp_sec: Optional[float] = None,
     ) -> "TrainingMetricsUpdateAttributes":
         """Create a TrainingMetricsUpdateAttributes object.
 
@@ -473,6 +474,8 @@ class TrainingMetricsUpdateAttributes(Attributes):
                 per-iteration train throughput values (this is the throughput of the iteration with the
                 lowest throughput).  None if unknown or unmeasured.
             first_logged_train_iterations_finish_timestamp_sec: The timestamp of the end of the first training
+                loop that was logged as seconds since epoch. None if unknown or unmeasured.
+            last_logged_train_iterations_finish_timestamp_sec: The timestamp of the end of the latest training
                 loop that was logged as seconds since epoch. None if unknown or unmeasured.
         """
         attributes = cls()
@@ -524,6 +527,8 @@ class TrainingMetricsUpdateAttributes(Attributes):
             attributes.add("train_throughput_per_gpu_min", train_throughput_per_gpu_min)
         if first_logged_train_iterations_finish_timestamp_sec is not None:
             attributes.add("first_logged_train_iterations_finish_timestamp_sec", first_logged_train_iterations_finish_timestamp_sec)
+        if last_logged_train_iterations_finish_timestamp_sec is not None:
+            attributes.add("last_logged_train_iterations_finish_timestamp_sec", last_logged_train_iterations_finish_timestamp_sec)
         return attributes
 
     @property
@@ -699,6 +704,11 @@ class TrainingMetricsUpdateAttributes(Attributes):
         """The timestamp of the end of the first training loop that was logged as seconds since epoch. None if unknown or unmeasured."""
         return self.get_float_value("first_logged_train_iterations_finish_timestamp_sec")
 
+    @property
+    def last_logged_train_iterations_finish_timestamp_sec(self) -> Optional[float]:
+        """The timestamp of the end of the latest training loop that was logged as seconds since epoch. None if unknown or unmeasured."""
+        return self.get_float_value("last_logged_train_iterations_finish_timestamp_sec")
+
 
 class ValidationMetricsUpdateAttributes(Attributes):
     """Event attributes for a VALIDATION_METRICS_UPDATE event of the VALIDATION_LOOP span for training jobs."""
@@ -842,6 +852,11 @@ class SaveCheckpointSuccessEventAttributes(Attributes):
         first_successful_save_checkpoint_timestamp_sec: float,
         latest_successful_save_checkpoint_timestamp_sec: float,
         save_checkpoint_success_count: int,
+        productive_train_iterations: int,
+        productive_train_samples: int,
+        productive_train_iterations_sec: float,
+        productive_validation_iterations_sec: float,
+        productive_train_tflops: Optional[float] = None,
         checkpoint_size: Optional[int] = None,
         checkpoint_directory: Optional[str] = None,
         training_start_timestamp_sec: Optional[float] = None,
@@ -856,6 +871,16 @@ class SaveCheckpointSuccessEventAttributes(Attributes):
             latest_successful_save_checkpoint_timestamp_sec: The timestamp of the latest successful save checkpoint.
                 The timestamp represents the time the checkpont save operation finished as fractional seconds since epoch.
             save_checkpoint_success_count: The number of times a checkpoint was succsffuly saved so far (in the current job).
+            productive_train_iterations: The number of train iterations that were productive (i.e. the work is saved in a checkpoint and
+                therefore, not wasted if the job fails later). This includes iterations from the checkpoint loaded at start of the job(if any).
+            productive_train_samples: The number of train samples that were productive (i.e. the work is saved in a checkpoint and
+                therefore, not wasted if the job fails later). This includes sampels used in training of the checkpoint loaded at start of the job(if any).
+            productive_train_iterations_sec: The number of seconds spent on training iterations that were productive (i.e. the work is saved in a checkpoint and
+                therefore, not wasted if the job fails later).
+            productive_validation_iterations_sec: The number of seconds spent on validation iterations that were productive (i.e. the work is saved in
+                a checkpoint and therefore, not wasted if the job fails later).
+            productive_train_tflops: The number of tflops (teraflops) that were productive (i.e. the work is saved in a checkpoint and
+                therefore, not wasted if the job fails later). None if unknown or unmeasured.
             checkpoint_size: The size of the checkpoint in bytes.
             checkpoint_directory: The directory where the checkpoint is saved.
             training_start_timestamp_sec: The timestamp of the start of the training loop corresponding to this checkpoint.
@@ -870,11 +895,21 @@ class SaveCheckpointSuccessEventAttributes(Attributes):
         assert_that(first_successful_save_checkpoint_timestamp_sec is not None, "first_successful_save_checkpoint_timestamp_sec is required.")
         assert_that(latest_successful_save_checkpoint_timestamp_sec is not None, "latest_successful_save_checkpoint_timestamp_sec is required.")
         assert_that(save_checkpoint_success_count is not None, "save_checkpoint_success_count is required.")
+        assert_that(productive_train_iterations is not None, "productive_train_iterations is required.")
+        assert_that(productive_train_samples is not None, "productive_train_samples is required.")
+        assert_that(productive_train_iterations_sec is not None, "productive_train_iterations_sec is required.")
+        assert_that(productive_validation_iterations_sec is not None, "productive_validation_iterations_sec is required.")
         attributes.add("checkpoint_strategy", checkpoint_strategy)
         attributes.add("current_iteration", current_iteration)
         attributes.add("first_successful_save_checkpoint_timestamp_sec", first_successful_save_checkpoint_timestamp_sec)
         attributes.add("latest_successful_save_checkpoint_timestamp_sec", latest_successful_save_checkpoint_timestamp_sec)
         attributes.add("save_checkpoint_success_count", save_checkpoint_success_count)
+        attributes.add("productive_train_iterations", productive_train_iterations)
+        attributes.add("productive_train_samples", productive_train_samples)
+        attributes.add("productive_train_iterations_sec", productive_train_iterations_sec)
+        attributes.add("productive_validation_iterations_sec", productive_validation_iterations_sec)
+        if productive_train_tflops is not None:
+            attributes.add("productive_train_tflops", productive_train_tflops)
         if checkpoint_size is not None:
             attributes.add("checkpoint_size", checkpoint_size)
         if checkpoint_directory is not None:
@@ -924,6 +959,57 @@ class SaveCheckpointSuccessEventAttributes(Attributes):
         val = self.get_int_value("save_checkpoint_success_count")
         assert_that(val is not None, "save_checkpoint_success_count is required.")
         return val  # type: ignore
+
+    @property
+    def productive_train_iterations(self) -> int:
+        """The number of train iterations that were productive.
+
+        That is the work is saved in a checkpoint and therefore, not wasted if the job fails later).
+        This includes iterations from the checkpoint loaded at start of the job(if any).
+        """
+        val = self.get_int_value("productive_train_iterations")
+        assert_that(val is not None, "productive_train_iterations is required.")
+        return val  # type: ignore
+
+    @property
+    def productive_train_samples(self) -> int:
+        """The number of train samples that were productive.
+
+        That is, the work is saved in a checkpoint and therefore, not wasted if the job fails later).
+        This includes samples used in training of the checkpoint loaded at start of the job(if any).
+        """
+        val = self.get_int_value("productive_train_samples")
+        assert_that(val is not None, "productive_train_samples is required.")
+        return val  # type: ignore
+
+    @property
+    def productive_train_iterations_sec(self) -> float:
+        """The number of seconds spent on training iterations that were productive.
+
+        That is, the work is saved in a checkpoint andtherefore, not wasted if the job fails later).
+        This includes sampels used in training of the checkpoint loaded at start of the job(if any).
+        """
+        val = self.get_float_value("productive_train_iterations_sec")
+        assert_that(val is not None, "productive_train_iterations_sec is required.")
+        return val  # type: ignore
+
+    @property
+    def productive_validation_iterations_sec(self) -> float:
+        """The number of seconds spent on validation iterations that were productive.
+
+        That is, the work is saved in a checkpoint and therefore, not wasted if the job fails later).
+        """
+        val = self.get_float_value("productive_validation_iterations_sec")
+        assert_that(val is not None, "productive_validation_iterations_sec is required.")
+        return val  # type: ignore
+
+    @property
+    def productive_train_tflops(self) -> Optional[float]:
+        """The number of tflops (teraflops) that were productive.
+
+        That is, the work is saved in a checkpoint and therefore, not wasted if the job fails later).
+        """
+        return self.get_float_value("productive_train_tflops")
 
     @property
     def checkpoint_size(self) -> Optional[int]:

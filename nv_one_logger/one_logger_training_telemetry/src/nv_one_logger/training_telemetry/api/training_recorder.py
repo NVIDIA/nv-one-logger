@@ -64,6 +64,31 @@ def _create_multi_iteration_timers() -> Dict[StandardTrainingJobSpanName, MultiW
 
 
 @dataclass
+class _ProductivityState:
+    """Stores productivity metrics as of a certain training iteration (global step)."""
+
+    # Completed training iterations (including iterations from the loaded checkpoint, i.e.,
+    # iterations before "train_iterations_start") where the work was saved to a checkpoint.
+    productive_train_iterations: int
+
+    # Number of training samples processed(including iterations from the loaded checkpoint, i.e.,
+    # iterations before "train_iterations_start") where the work was saved to a checkpoint.
+    productive_train_samples: int
+
+    # Total time spent on training iterations that have been saved to a checkpoint (does NOT include the time
+    # spent in another job whose checkpoint is loaded at start of this job).
+    productive_train_iterations_sec: float
+
+    # Total time spent on validation iterations for work that has been saved to a checkpoint (does NOT include the time
+    # spent in another job whose checkpoint is loaded at start of this job).
+    productive_validation_iterations_sec: float
+
+    # Number of floating point operations completed so far (including the ones from the loaded checkpoint and
+    # the ones from the current job) for work that has been saved to a checkpoint. None if unknown or unmeasured.
+    productive_train_tflops: Optional[float] = None
+
+
+@dataclass
 class _TrainingState:
     """Internal state for tracking training progress and metrics.
 
@@ -98,7 +123,7 @@ class _TrainingState:
     train_samples_start: int = 0
 
     # Number of training samples processed so far in the current job (does NOT include the samples from the loaded checkpoint).
-    train_samples_start_processed_current_job: int = 0
+    train_samples_processed_current_job: int = 0
 
     # Total number of floating point operations in the current job.
     total_flops_current_job: int = 0
@@ -110,6 +135,9 @@ class _TrainingState:
     # Number of floating point operations completed so far (including the ones from the loaded checkpoint and
     # the ones from the current job). None if unknown or unmeasured.
     completed_floating_point_operations_overall: Optional[int] = None
+
+    # The timestamp of the start of the training loop.
+    training_loop_start_time: Optional[TracingTimestamp] = None
 
     # The timestamp of the end of the first training loop that was logged.
     first_logged_train_iterations_finish_time: Optional[TracingTimestamp] = None
@@ -136,6 +164,21 @@ class _TrainingState:
 
     # Number of checkpoints successfully saved in the current job.
     successful_save_checkpoint_count_current_job: int = 0
+
+    # The productivity state at a particular iteration.
+    # When a training job fails, the work done between the last successful checkpoint and the time of failure is
+    # wasted (non-productive) work. We keep track of the work done (number of completed iterations, samples processed, etc
+    # right before we create a checkpoint and if the checkpoint succeeds, we consider that work to be productive.
+    # Since we support async checkpoints, we cannot assume that the current state (current iteration, samples processed, etc)
+    # at the time of the checkpoint save success reflects what was included in the checkpoint (we may do additional work
+    # after kicking off an async checkpoint). This is why this field is a dictionary that maps iteration number (global step)
+    # at the time the checkpoint save operation started to a _ProductivityState object.
+    productivity_state: Dict[int, _ProductivityState] = field(default_factory=dict)
+
+    # The maximum iteration number (global step) for which productivty metrics were reported.
+    # This is used to avoid reporting productivity metrics for an older checkpoint (which could happen
+    # with async checkpoints if they complete out of order).
+    max_reported_productive_train_iterations: int = -1
 
 
 class TrainingRecorder(DefaultRecorder):
@@ -490,9 +533,12 @@ class TrainingRecorder(DefaultRecorder):
             train_samples_start >= 0,
             f"Invalid value for train_samples_start in TrainingLoopAttributes object: {train_samples_start}",
         )
+        if not start_time:
+            start_time = TracingTimestamp.now()
 
         # Step 1: Update the state.
         state = self._training_state
+        state.training_loop_start_time = start_time
         state.train_iterations_start = train_iterations_start
         state.train_samples_start = train_samples_start
         # We assume the first iteration is iteration 0. So completed_training_iterations_overall is the same as train_iterations_start.
@@ -506,7 +552,7 @@ class TrainingRecorder(DefaultRecorder):
                 "flops_per_sample must be set to a positive value when is_log_throughput_enabled is True",
             )
             # The initial value of completed_floating_point_operations_overall is nonzero if loading ckpt, whereas total_flops_current_job
-            # is always initialized tozero. For example, if train_iterations_start is 1,  it means that one iteration (iteration 0) has
+            # is always initialized to zero. For example, if train_iterations_start is 1,  it means that one iteration (iteration 0) has
             # been completed in a previous run.
             state.completed_floating_point_operations_overall = (
                 train_iterations_start * self._config.global_batch_size * self._config.flops_per_sample
@@ -568,9 +614,9 @@ class TrainingRecorder(DefaultRecorder):
         training_iteration_timer.stop(stop_time)
 
         self._training_state.completed_training_iterations_overall += 1
-        self._training_state.train_samples_start_processed_current_job += self._config.global_batch_size
+        self._training_state.train_samples_processed_current_job += self._config.global_batch_size
         if self._config.seq_length:
-            self._training_state.train_tokens_current_job = self._config.seq_length * self._training_state.train_samples_start_processed_current_job
+            self._training_state.train_tokens_current_job = self._config.seq_length * self._training_state.train_samples_processed_current_job
 
         self._training_state.last_logged_train_iterations_finish_time = stop_time
         if not self._training_state.first_logged_train_iterations_finish_time:
@@ -586,10 +632,6 @@ class TrainingRecorder(DefaultRecorder):
                 self._training_state.completed_floating_point_operations_overall is not None, "completed_floating_point_operations_overall must be initialized."
             )
             self._training_state.completed_floating_point_operations_overall += flops  # type: ignore[reportOperatorIssue]
-            assert_that(
-                self._training_state.total_flops_current_job is not None,  # type: ignore[reportUnnecesaryComparison]
-                "Must be initialized! Did you start the TRAINING_LOOP span?",
-            )
             self._training_state.total_flops_current_job += flops
             train_iterations_time_total = training_iteration_timer.total_time_sec
             assert_that(train_iterations_time_total > 0, "train_iterations_time_total must be greater than 0")
@@ -611,7 +653,9 @@ class TrainingRecorder(DefaultRecorder):
         # iteration number (global step) is zero-based. So if completed_training_iterations_overall is N,
         # the last completed training iteration was iteration N-1.
         latest_iteration = self._training_state.completed_training_iterations_overall - 1
-        if latest_iteration > 0 and latest_iteration % self._config.log_every_n_train_iterations == 0:
+        # We are adding 1 to latest_iteration to make this compatible with the previous implementation, which logged
+        # metrics on the iteration before iterations that are multiple of log_every_n_train_iterations.
+        if latest_iteration > 0 and (latest_iteration + 1) % self._config.log_every_n_train_iterations == 0:
             training_loop_span = self._get_active_span(StandardTrainingJobSpanName.TRAINING_LOOP)
             training_iteration_timer = self._training_state.multi_iteration_timers[StandardTrainingJobSpanName.TRAINING_SINGLE_ITERATION]
             attributes = TrainingMetricsUpdateAttributes.create(
@@ -619,7 +663,7 @@ class TrainingRecorder(DefaultRecorder):
                 current_iteration=latest_iteration,
                 num_iterations=training_iteration_timer.total_window_count,
                 train_samples_start=self._training_state.train_samples_start,
-                num_train_samples=self._training_state.train_samples_start_processed_current_job,
+                num_train_samples=self._training_state.train_samples_processed_current_job,
                 interval=self._config.log_every_n_train_iterations,
                 avg_iteration_time_sec=training_iteration_timer.avg_window_duration_sec,
                 min_iteration_time_sec=training_iteration_timer.min_window_duration_sec,
@@ -634,6 +678,11 @@ class TrainingRecorder(DefaultRecorder):
                 first_logged_train_iterations_finish_timestamp_sec=(
                     self._training_state.first_logged_train_iterations_finish_time.seconds_since_epoch
                     if self._training_state.first_logged_train_iterations_finish_time
+                    else None
+                ),
+                last_logged_train_iterations_finish_timestamp_sec=(
+                    self._training_state.last_logged_train_iterations_finish_time.seconds_since_epoch
+                    if self._training_state.last_logged_train_iterations_finish_time
                     else None
                 ),
             )
@@ -797,26 +846,44 @@ class TrainingRecorder(DefaultRecorder):
             span_name = StandardTrainingJobSpanName.CHECKPOINT_SAVE_ASYNC
         else:
             raise OneLoggerError(f"Invalid checkpoint strategy: {self._config.save_checkpoint_strategy}")
+        if self._config.is_save_checkpoint_enabled:
+            timers = self._training_state.multi_iteration_timers
+            self._training_state.productivity_state[current_iteration] = _ProductivityState(
+                productive_train_iterations=self._training_state.completed_training_iterations_overall,
+                productive_train_samples=self._training_state.train_samples_start + self._training_state.train_samples_processed_current_job,
+                productive_train_iterations_sec=timers[StandardTrainingJobSpanName.TRAINING_SINGLE_ITERATION].total_time_sec,
+                productive_validation_iterations_sec=timers[StandardTrainingJobSpanName.VALIDATION_SINGLE_ITERATION].total_time_sec,
+                productive_train_tflops=(
+                    float(self._training_state.completed_floating_point_operations_overall) / (10**12)
+                    if self._training_state.completed_floating_point_operations_overall is not None
+                    else None
+                ),
+            )
 
-        timer = self._training_state.multi_iteration_timers[span_name]
-        timer.start(start_time)
+            timer = self._training_state.multi_iteration_timers[span_name]
+            timer.start(start_time)
 
-        # Step 2: Create the span.
-        span_attributes = CheckpointSaveSpanAttributes.create(
-            self._config.save_checkpoint_strategy,
-            current_iteration=current_iteration,
-            # The current save attempt is already included in the total window count.
-            save_checkpoint_attempt_count=timer.total_window_count,
-        )
+            # Step 2: Create the span.
+            span_attributes = CheckpointSaveSpanAttributes.create(
+                self._config.save_checkpoint_strategy,
+                current_iteration=current_iteration,
+                # The current save attempt is already included in the total window count.
+                save_checkpoint_attempt_count=timer.total_window_count,
+            )
+        else:
+            span_attributes = None
         return self.start(span_name=span_name, span_attributes=span_attributes)
 
     def on_save_checkpoint_success(self, current_iteration: int, timestamp: TracingTimestamp) -> None:
         """Send an event of type SAVE_CHECKPOINT_SUCCESS and update the state if necessary.
 
         Args:
-            current_iteration: The current iteration number.
+            current_iteration: The current iteration number (global step) at the time the checkpoint save operation started.
             timestamp: The timestamp of the checkpoint saving.
         """
+        if not self._config.is_save_checkpoint_enabled:
+            return
+
         # Step 1: Update the state.
         conf = self._config
         parent_span = None
@@ -834,6 +901,19 @@ class TrainingRecorder(DefaultRecorder):
         if not state.first_save_checkpoint_success_time:
             state.first_save_checkpoint_success_time = timestamp
 
+        productivity_state = state.productivity_state.get(current_iteration)
+        if productivity_state is not None:
+            self._training_state.productivity_state.pop(current_iteration)
+        else:
+            # This shouldn't happen but just in case...
+            productivity_state = _ProductivityState(
+                productive_train_iterations=0,
+                productive_train_samples=0,
+                productive_train_iterations_sec=0,
+                productive_validation_iterations_sec=0,
+                productive_train_tflops=0,
+            )
+
         # Step 2: Create the event.
         event_attributes = SaveCheckpointSuccessEventAttributes.create(
             checkpoint_strategy=conf.save_checkpoint_strategy,
@@ -841,9 +921,12 @@ class TrainingRecorder(DefaultRecorder):
             first_successful_save_checkpoint_timestamp_sec=state.first_save_checkpoint_success_time.seconds_since_epoch,
             latest_successful_save_checkpoint_timestamp_sec=state.latest_save_checkpoint_success_time.seconds_since_epoch,
             save_checkpoint_success_count=state.successful_save_checkpoint_count_current_job,
-            training_start_timestamp_sec=(
-                state.first_logged_train_iterations_finish_time.seconds_since_epoch if state.first_logged_train_iterations_finish_time else None
-            ),
+            productive_train_iterations=productivity_state.productive_train_iterations,
+            productive_train_samples=productivity_state.productive_train_samples,
+            productive_train_iterations_sec=productivity_state.productive_train_iterations_sec,
+            productive_validation_iterations_sec=productivity_state.productive_validation_iterations_sec,
+            training_start_timestamp_sec=(state.training_loop_start_time.seconds_since_epoch if state.training_loop_start_time else None),
+            productive_train_tflops=productivity_state.productive_train_tflops,
         )
         self.event(
             parent_span,
@@ -856,7 +939,6 @@ class TrainingRecorder(DefaultRecorder):
         Args:
             stop_time: The timestamp of the end of testing.
         """
-        # Step 1: Update the state.
         span = None
         if self._config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
             span = self._get_active_span(StandardTrainingJobSpanName.CHECKPOINT_SAVE_SYNC)
@@ -864,11 +946,14 @@ class TrainingRecorder(DefaultRecorder):
             span = self._get_active_span(StandardTrainingJobSpanName.CHECKPOINT_SAVE_ASYNC)
         else:
             raise OneLoggerError(f"Invalid checkpoint strategy: {self._config.save_checkpoint_strategy}")
-        self._training_state.multi_iteration_timers[span.name].stop(stop_time=stop_time)  # type: ignore[reportArgumentType]
 
-        # Step 2: send an event of type SYNC_CHECKPOINT_METRICS_UPDATE if sync checkpoint.
-        if self._config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
-            self.event(span, self.create_sync_checkpoint_metrics_event())
+        # Step 1: Update the state.
+        if self._config.is_save_checkpoint_enabled:
+            self._training_state.multi_iteration_timers[span.name].stop(stop_time=stop_time)  # type: ignore[reportArgumentType]
+
+            # Step 2: send an event of type SYNC_CHECKPOINT_METRICS_UPDATE if sync checkpoint.
+            if self._config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
+                self.event(span, self.create_sync_checkpoint_metrics_event())
 
         # Step 3: stop the span.
         self.stop(span=span, stop_time=stop_time)

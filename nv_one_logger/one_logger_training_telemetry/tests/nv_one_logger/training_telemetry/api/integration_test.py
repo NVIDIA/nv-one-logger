@@ -53,8 +53,8 @@ from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
-from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
+from .conftest import configure_provider_for_test
 from .utils import (
     advance_time,
     assert_exporter_method_call_sequence,
@@ -71,10 +71,7 @@ from .utils import (
 @pytest.fixture(autouse=True)
 def configure_provider(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
     """Fixture that configures the TrainingTelemetryProvider."""
-    # Reset the state of the singletons
-    OneLoggerProvider.instance()._config = None
-    OneLoggerProvider.instance()._recorder = None
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    configure_provider_for_test(config, mock_exporter)
 
 
 STARTING_PERF_COUNTER = 200
@@ -235,6 +232,7 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
     expected_validation_loops_so_far = 0
     expected_first_ckpt_ts = None
     expected_first_iter_finish_ts = None
+    expected_validation_time_sec = 0.0
     # TRAINING_SINGLE_ITERATION span
     # iteration is the iteration number relative to the start of this training job.
     for iteration in range(0, num_train_iterations):
@@ -260,9 +258,10 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
         if not expected_first_iter_finish_ts:
             expected_first_iter_finish_ts = TracingTimestamp.now()
         on_training_single_iteration_end()
+        latest_iteration_finish_ts = TracingTimestamp.now()
 
         # We send out metrics every N iterations where n=log_every_n_train_iterations
-        if cur_iteration > 0 and cur_iteration % config.log_every_n_train_iterations == 0:
+        if cur_iteration > 0 and (cur_iteration + 1) % config.log_every_n_train_iterations == 0:
             expected_calls.append(Exporter.export_event)  # For TRAINING_METRICS_UPDATE event
             event = event_from_export_event(mock_exporter, training_loop_span)
             assert event.name == StandardTrainingJobEventName.TRAINING_METRICS_UPDATE
@@ -287,6 +286,7 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
                 train_throughput_per_gpu_max=expected_train_throughput_per_gpu_max,
                 train_throughput_per_gpu_min=expected_train_throughput_per_gpu_min,
                 first_logged_train_iterations_finish_timestamp_sec=expected_first_iter_finish_ts.seconds_since_epoch,
+                last_logged_train_iterations_finish_timestamp_sec=latest_iteration_finish_ts.seconds_since_epoch,
             ).add(StandardEventAttributeName.TIMESTAMP_MSEC, _cur_ts(mock_time))
         else:
             assert len(mock_exporter.mock_calls) == prev_export_count, "Exporter was called unnecessarily for TRAINING_SINGLE_ITERATION"
@@ -317,7 +317,12 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
                 first_successful_save_checkpoint_timestamp_sec=expected_first_ckpt_ts.seconds_since_epoch,
                 latest_successful_save_checkpoint_timestamp_sec=expected_latest_ckpt_ts.seconds_since_epoch,
                 save_checkpoint_success_count=expected_saved_checkpoints_so_far,
-                training_start_timestamp_sec=expected_first_iter_finish_ts.seconds_since_epoch,
+                training_start_timestamp_sec=training_loop_start.seconds_since_epoch,
+                productive_train_iterations=cur_iteration + 1,
+                productive_train_samples=config.global_batch_size * (cur_iteration + 1),
+                productive_train_iterations_sec=expected_total_iteration_time_sec,
+                productive_validation_iterations_sec=expected_validation_time_sec,
+                productive_train_tflops=config.global_batch_size * config.flops_per_sample * (cur_iteration + 1) / 10**12,
             )
             expected_ev_attributes.add(StandardEventAttributeName.TIMESTAMP_MSEC, _cur_ts(mock_time))
             assert event.attributes == expected_ev_attributes
@@ -361,6 +366,7 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
                     on_validation_single_iteration_start()
 
                 advance_time(mock_time, mock_perf_counter, 200.0)
+                expected_validation_time_sec += 200.0
                 with assert_no_export(mock_exporter):
                     on_validation_single_iteration_end()
 
@@ -403,8 +409,8 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
     assert training_loop_span.updated_attributes == Attributes(
         {StandardSpanAttributeName.DURATION_MSEC: int(mock_perf_counter.return_value - training_loop_start.perf_counter_seconds) * 1000}
     )
-    # start, stop and 6 TRAINING_METRICS_UPDATE events
-    assert len(training_loop_span.events) == 8
+    # start, stop and 5 TRAINING_METRICS_UPDATE events
+    assert len(training_loop_span.events) == 7
     assert training_loop_span.stop_event.attributes == Attributes({StandardEventAttributeName.TIMESTAMP_MSEC: _cur_ts(mock_time)})
 
     advance_time(mock_time, mock_perf_counter, 500.0)
@@ -422,3 +428,65 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
     expected_calls.append(Exporter.close)
     assert_exporter_method_call_sequence(mock_exporter, expected_calls)
     assert_exporter_method_call_sequence(mock_exporter, expected_calls)
+
+
+def test_training_e2e_disabled_for_current_rank(config: TrainingTelemetryConfig, mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock) -> None:
+    """Tests the full lifecycle of a typical training job with training telemetry disabled for the current rank."""
+    config.enable_for_current_rank = False
+    configure_provider_for_test(config, mock_exporter)
+
+    mock_time.return_value = STARTING_TIME
+    mock_perf_counter.return_value = STARTING_PERF_COUNTER
+
+    assert on_app_start() is None
+
+    # DATA_LOADER_INIT span
+    assert on_dataloader_init_start() is None
+    assert on_dataloader_init_end() is None
+
+    # CHECKPOINT_LOAD span
+    assert on_load_checkpoint_start() is None
+    assert on_load_checkpoint_end() is None
+
+    # MODEL_INIT span
+    assert on_model_init_start() is None
+    assert on_model_init_end() is None
+
+    # OPTIMIZER_INIT span
+    assert on_optimizer_init_start() is None
+    assert on_optimizer_init_end() is None
+
+    # TRAINING_LOOP span
+    assert (
+        on_train_start(
+            train_iterations_start=0,
+            train_samples_start=3200,
+            train_iterations_target_or_fn=1000,
+            train_samples_target_or_fn=32000,
+        )
+        is None
+    )
+    # TRAINING_SINGLE_ITERATION span
+    for cur_iteration in range(0, 20):
+        assert on_training_single_iteration_start() is None
+        assert on_training_single_iteration_end() is None
+        if cur_iteration % 2 == 0:
+            assert on_save_checkpoint_start(global_step=cur_iteration) is None
+            assert on_save_checkpoint_success(global_step=cur_iteration) is None
+            assert on_save_checkpoint_end() is None
+        if cur_iteration % 2 == 0:
+            # VALIDATION_LOOP span
+            assert on_validation_start() is None
+            for _ in range(3):
+                # VALIDATION_SINGLE_ITERATION span
+                assert on_validation_single_iteration_start() is None
+                assert on_validation_single_iteration_end() is None
+            assert on_validation_end() is None
+
+    assert on_train_end() is None
+    assert on_app_end() is None
+
+    mock_exporter.assert_not_called()
+
+    # Undo the force disable logging so that other tests don't fail.
+    OneLoggerProvider.instance()._logging_force_disabled = False

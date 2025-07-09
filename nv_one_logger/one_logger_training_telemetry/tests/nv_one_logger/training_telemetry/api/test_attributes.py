@@ -364,7 +364,7 @@ class TestTrainingMetricsUpdateAttributes:
             params = base_params.copy()
             params[param] = None  # type: ignore[assignment]
             with pytest.raises(OneLoggerError, match=error_msg):
-                TrainingMetricsUpdateAttributes.create(**params)
+                TrainingMetricsUpdateAttributes.create(**params)  # type: ignore[arg-type]
 
 
 class TestValidationMetricsUpdateAttributes:
@@ -465,6 +465,10 @@ class TestSaveCheckpointSuccessEventAttributes:
             first_successful_save_checkpoint_timestamp_sec=1100.0,
             latest_successful_save_checkpoint_timestamp_sec=1100.0,
             save_checkpoint_success_count=5,
+            productive_train_iterations=50,
+            productive_train_samples=500,
+            productive_train_iterations_sec=30.0,
+            productive_validation_iterations_sec=10.0,
         )
         assert isinstance(attrs.checkpoint_strategy, CheckPointStrategy)
         assert attrs.checkpoint_strategy == CheckPointStrategy.SYNC
@@ -472,6 +476,10 @@ class TestSaveCheckpointSuccessEventAttributes:
         assert attrs.first_successful_save_checkpoint_timestamp_sec == 1100.0
         assert attrs.latest_successful_save_checkpoint_timestamp_sec == 1100.0
         assert attrs.save_checkpoint_success_count == 5
+        assert attrs.productive_train_iterations == 50
+        assert attrs.productive_train_samples == 500
+        assert attrs.productive_train_iterations_sec == 30.0
+        assert attrs.productive_validation_iterations_sec == 10.0
         assert attrs.checkpoint_size is None
         assert attrs.checkpoint_directory is None
         assert attrs.training_start_timestamp_sec is None
@@ -484,6 +492,11 @@ class TestSaveCheckpointSuccessEventAttributes:
             first_successful_save_checkpoint_timestamp_sec=2100.0,
             latest_successful_save_checkpoint_timestamp_sec=2100.0,
             save_checkpoint_success_count=5,
+            productive_train_iterations=100,
+            productive_train_samples=1000,
+            productive_train_tflops=50.0,
+            productive_train_iterations_sec=60.0,
+            productive_validation_iterations_sec=20.0,
             checkpoint_size=1000000,
             checkpoint_directory="/path/to/checkpoint",
             training_start_timestamp_sec=2000.0,
@@ -493,6 +506,11 @@ class TestSaveCheckpointSuccessEventAttributes:
         assert attrs.first_successful_save_checkpoint_timestamp_sec == 2100.0
         assert attrs.latest_successful_save_checkpoint_timestamp_sec == 2100.0
         assert attrs.save_checkpoint_success_count == 5
+        assert attrs.productive_train_iterations == 100
+        assert attrs.productive_train_samples == 1000
+        assert attrs.productive_train_tflops == 50.0
+        assert attrs.productive_train_iterations_sec == 60.0
+        assert attrs.productive_validation_iterations_sec == 20.0
         assert attrs.checkpoint_size == 1000000
         assert attrs.checkpoint_directory == "/path/to/checkpoint"
         assert attrs.training_start_timestamp_sec == 2000.0
@@ -505,6 +523,10 @@ class TestSaveCheckpointSuccessEventAttributes:
             "first_successful_save_checkpoint_timestamp_sec": "first_successful_save_checkpoint_timestamp_sec is required",
             "latest_successful_save_checkpoint_timestamp_sec": "latest_successful_save_checkpoint_timestamp_sec is required",
             "save_checkpoint_success_count": "save_checkpoint_success_count is required",
+            "productive_train_iterations": "productive_train_iterations is required",
+            "productive_train_samples": "productive_train_samples is required",
+            "productive_train_iterations_sec": "productive_train_iterations_sec is required",
+            "productive_validation_iterations_sec": "productive_validation_iterations_sec is required",
         }
 
         base_params = {
@@ -513,6 +535,14 @@ class TestSaveCheckpointSuccessEventAttributes:
             "first_successful_save_checkpoint_timestamp_sec": 1100.0,
             "latest_successful_save_checkpoint_timestamp_sec": 1100.0,
             "save_checkpoint_success_count": 2,
+            "productive_train_iterations": 50,
+            "productive_train_samples": 500,
+            "productive_train_iterations_sec": 30.0,
+            "productive_validation_iterations_sec": 10.0,
+            "productive_train_tflops": 25.0,
+            "checkpoint_size": 400,
+            "checkpoint_directory": "/path/to/checkpoint",
+            "training_start_timestamp_sec": 2000.0,
         }
 
         for param, error_msg in required_params.items():

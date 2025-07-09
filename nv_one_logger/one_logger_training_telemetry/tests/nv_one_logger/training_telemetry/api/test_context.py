@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for the context module."""
+# pyright: reportPrivateUsage=false
 
 from typing import Dict
 from unittest.mock import MagicMock, Mock
@@ -36,6 +37,7 @@ from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEvent
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
+from .conftest import configure_provider_for_test
 from .utils import (
     advance_time,
     assert_exporter_method_call_sequence,
@@ -52,10 +54,7 @@ STARTING_TIME = 120000.0
 @pytest.fixture(autouse=True)
 def configure_provider(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
     """Fixture that configures the TrainingTelemetryProvider."""
-    # Reset the state of the singletons
-    OneLoggerProvider.instance()._config = None  # type: ignore[reportPrivateUsage]
-    OneLoggerProvider.instance()._recorder = None  # type: ignore[reportPrivateUsage]
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    configure_provider_for_test(config, mock_exporter)
 
 
 @pytest.fixture(autouse=True)
@@ -265,7 +264,12 @@ def test_checkpoint_save_context_success(mock_exporter: MagicMock, mock_perf_cou
         first_successful_save_checkpoint_timestamp_sec=STARTING_TIME + 200,
         latest_successful_save_checkpoint_timestamp_sec=STARTING_TIME + 200,
         save_checkpoint_success_count=1,
-        training_start_timestamp_sec=0.0,
+        productive_train_iterations=0,
+        productive_train_samples=0,
+        productive_train_iterations_sec=0,
+        productive_validation_iterations_sec=0,
+        productive_train_tflops=0,
+        training_start_timestamp_sec=0,
     )
     expected_success_ev_attributes.add(StandardEventAttributeName.TIMESTAMP_MSEC, int((STARTING_TIME + 200) * 1000))
     assert ckpt_success_event.attributes == expected_success_ev_attributes
@@ -420,3 +424,41 @@ def test_validation_iteration_context(mock_exporter: MagicMock, mock_perf_counte
             Exporter.initialize,
         ],
     )
+
+
+def test_disabled_for_current_rank(config: TrainingTelemetryConfig, mock_exporter: MagicMock) -> None:
+    """Test that the training telemetry is disabled for the current rank."""
+    config.enable_for_current_rank = False
+    OneLoggerProvider.instance()._config = None  # type: ignore[protected-access]
+    OneLoggerProvider.instance()._recorder = None  # type: ignore[protected-access]
+    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+
+    # Try a few context managers to make sure the provider is disabled.
+    with application() as app_span:
+        assert app_span is None
+        with model_init() as model_init_span:  # type: ignore[unreachable]
+            assert model_init_span is None
+        with dataloader_init() as dataloader_init_span:
+            assert dataloader_init_span is None
+        with optimizer_init() as optimizer_init_span:
+            assert optimizer_init_span is None
+        with checkpoint_load() as checkpoint_load_span:
+            assert checkpoint_load_span is None
+        with checkpoint_save(100) as checkpoint_save_span:
+            assert checkpoint_save_span is None
+        with training_loop(
+            train_iterations_start=0, train_iterations_target_or_fn=1000, train_samples_target_or_fn=1000 * config.global_batch_size
+        ) as training_loop_span:
+            assert training_loop_span is None
+            with training_iteration() as training_iteration_span:
+                assert training_iteration_span is None
+        with validation_loop() as validation_loop_span:
+            assert validation_loop_span is None
+            with validation_iteration() as validation_iteration_span:
+                assert validation_iteration_span is None
+        with testing_loop() as testing_loop_span:
+            assert testing_loop_span is None
+    mock_exporter.assert_not_called()  # type: ignore[unreachable]
+
+    # Undo the force disable logging so that other tests don't fail.
+    OneLoggerProvider.instance()._logging_force_disabled = False

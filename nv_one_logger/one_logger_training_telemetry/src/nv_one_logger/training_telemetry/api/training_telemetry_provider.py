@@ -82,8 +82,18 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         """
         assert_that(config, "config cannot be None.")
         config.validate_config()
+        self._config = config
+
+        if not config.enable_for_current_rank:
+            # Exporters can have non-trivial initialization logic (e.g., connecting to a remote server)
+            # that we don't need to run if the training telemetry is disabled.
+            exporters = []
+
         recorder = TrainingRecorder(config=config, exporters=exporters, export_customization_mode=export_customization_mode, span_name_filter=span_name_filter)
         OneLoggerProvider.instance().configure(config, recorder)
+
+        if not config.enable_for_current_rank:
+            OneLoggerProvider.instance().force_disable_logging()
 
     @property
     def recorder(self) -> TrainingRecorder:
@@ -109,12 +119,6 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         """Check if the one_logger is ready to be used."""
         return OneLoggerProvider.instance().one_logger_ready
 
-    @property
-    def one_logger_enabled(self) -> bool:
-        """Check if the one_logger is ready to be used and logging is not forced to be disabled."""
-        return OneLoggerProvider.instance().one_logger_enabled
-
     def force_disable_logging(self) -> None:
         """Force logging to be disabled effectively disabling onelogger library."""
-        OneLoggerProvider.instance().force_disable_logging()
         OneLoggerProvider.instance().force_disable_logging()

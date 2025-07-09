@@ -6,7 +6,6 @@ from typing import Set
 from unittest.mock import Mock
 
 import pytest
-from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.metric_summarizer import MetricSummarizer
 from nv_one_logger.core.internal.multi_window_timer import MultiWindowTimer
@@ -18,7 +17,7 @@ from nv_one_logger.recorder.default_recorder import ExportCustomizationMode
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
-from nv_one_logger.training_telemetry.api.training_recorder import TrainingRecorder, _TrainingState
+from nv_one_logger.training_telemetry.api.training_recorder import TrainingRecorder, _ProductivityState, _TrainingState
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import DEFAULT_SPANS_EXPORT_BLACKLIST
 
 from .utils import advance_time
@@ -50,9 +49,6 @@ def training_recorder(config: TrainingTelemetryConfig, mock_exporter: Exporter) 
         export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS,
         span_name_filter=DEFAULT_SPANS_EXPORT_BLACKLIST,
     )
-    OneLoggerProvider.instance()._config = config
-    OneLoggerProvider.instance()._recorder = recorder
-
     return recorder
 
 
@@ -73,7 +69,7 @@ def test_training_recorder_initialization(training_recorder: TrainingRecorder) -
     assert state.completed_training_iterations_overall == 0
     assert state.completed_floating_point_operations_overall == 0
     assert state.total_flops_current_job == 0
-    assert state.train_samples_start_processed_current_job == 0
+    assert state.train_samples_processed_current_job == 0
     assert state.first_logged_train_iterations_finish_time is None
     assert state.first_save_checkpoint_success_time is None
 
@@ -117,7 +113,8 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     4. Multiple checkpoint saves update timestamps correctly
     """
     train_iterations_start = 5
-    training_recorder.on_training_loop_start(train_iterations_start=train_iterations_start, train_samples_start=3000)
+    train_samples_start = 3000
+    training_recorder.on_training_loop_start(train_iterations_start=train_iterations_start, train_samples_start=train_samples_start)
 
     expected_state = _TrainingState(
         multi_iteration_timers={
@@ -129,18 +126,22 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
         },
         train_iterations_start=train_iterations_start,
         completed_training_iterations_overall=5,  # We will start from iteration 5 so we have completed iterations 0-4 (5 iterations in total).
-        train_samples_start=3000,
-        train_samples_start_processed_current_job=0,
+        train_samples_start=train_samples_start,
+        train_samples_processed_current_job=0,
         total_flops_current_job=0,
         train_tokens_current_job=None,
         completed_floating_point_operations_overall=train_iterations_start * config.global_batch_size * config.flops_per_sample,
-        validation_interval_start=5,
-        testing_interval_start=5,
+        training_loop_start_time=TracingTimestamp.now(),
         first_logged_train_iterations_finish_time=None,
         last_logged_train_iterations_finish_time=None,
         first_save_checkpoint_success_time=None,
         latest_save_checkpoint_success_time=None,
+        validation_interval_start=5,
+        testing_interval_start=5,
         tflops_per_gpu=MetricSummarizer[float](),
+        successful_save_checkpoint_count_current_job=0,
+        productivity_state={},
+        max_reported_productive_train_iterations=-1,
     )
 
     assert training_recorder._training_state == expected_state
@@ -178,7 +179,7 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     expected_state.completed_training_iterations_overall = 6
     expected_state.completed_floating_point_operations_overall = 19200  # 6 iterations * 32 batch size * 100 flops
     expected_state.total_flops_current_job = 3200  # 32 batch size * 100 flops
-    expected_state.train_samples_start_processed_current_job = 32  # batch size
+    expected_state.train_samples_processed_current_job = 32  # batch size
     expected_state.first_logged_train_iterations_finish_time = latest_ts
     expected_state.last_logged_train_iterations_finish_time = latest_ts
     expected_state.tflops_per_gpu.add_value(3200 / (10 * 10**12 * config.world_size))
@@ -198,7 +199,7 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     expected_state.completed_training_iterations_overall = 7
     expected_state.completed_floating_point_operations_overall = 22400  # 7 iterations * 32 batch size * 100 flops
     expected_state.total_flops_current_job = 3200 * 2
-    expected_state.train_samples_start_processed_current_job = 32 * 2
+    expected_state.train_samples_processed_current_job = 32 * 2
     expected_state.last_logged_train_iterations_finish_time = latest_ts
     expected_state.tflops_per_gpu.add_value(3200 * 2 / ((10 + 20) * 10**12 * config.world_size))
     assert training_recorder._training_state == expected_state
@@ -268,7 +269,7 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     expected_state.completed_training_iterations_overall = 8
     expected_state.completed_floating_point_operations_overall = 25600  # 8 iterations * 32 batch size * 100 flops
     expected_state.total_flops_current_job = 3200 * 3
-    expected_state.train_samples_start_processed_current_job = 32 * 3
+    expected_state.train_samples_processed_current_job = 32 * 3
     expected_state.last_logged_train_iterations_finish_time = latest_ts
     expected_state.tflops_per_gpu.add_value(3200 * 3 / ((10 + 20 + 20) * 10**12 * config.world_size))
     assert training_recorder._training_state == expected_state
@@ -291,6 +292,15 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
 
     expected_state.latest_save_checkpoint_success_time = event_time
     expected_state.successful_save_checkpoint_count_current_job = 2
+    expected_state.productivity_state = {
+        2: _ProductivityState(
+            productive_train_iterations=train_iterations_start + 3,
+            productive_train_samples=train_samples_start + 32 * 3,
+            productive_train_iterations_sec=10 + 20 + 20,
+            productive_validation_iterations_sec=20 + 50,
+            productive_train_tflops=(train_iterations_start + 3) * config.global_batch_size * config.flops_per_sample / 10**12,
+        )
+    }
     assert training_recorder._training_state == expected_state
 
 
@@ -439,7 +449,7 @@ def test_events_for_typical_training_job(
         StandardTrainingJobEventName.SAVE_CHECKPOINT_SUCCESS: 29,
         StandardTrainingJobEventName.SYNC_CHECKPOINT_METRICS_UPDATE: 29,
         # reporting training metrics every 10 iterations (10, 20, ...80)
-        StandardTrainingJobEventName.TRAINING_METRICS_UPDATE: 8,
+        StandardTrainingJobEventName.TRAINING_METRICS_UPDATE: 9,
         StandardTrainingJobEventName.VALIDATION_METRICS_UPDATE: 17,
         StandardTrainingJobEventName.TESTING_METRICS_UPDATE: 1,
     }

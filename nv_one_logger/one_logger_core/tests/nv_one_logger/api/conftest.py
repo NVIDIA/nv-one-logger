@@ -31,8 +31,6 @@ def config() -> OneLoggerConfig:
         app_type_or_fn=ApplicationType.TRAINING,
         enable_one_logger=True,
     )
-
-    config.validate_config()
     return config
 
 

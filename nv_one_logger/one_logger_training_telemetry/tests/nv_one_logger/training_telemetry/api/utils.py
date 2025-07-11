@@ -1,13 +1,25 @@
 # SPDX-License-Identifier: Apache-2.0
+# pyright: reportPrivateUsage=false
 """Utility functions for testing the training telemetry API."""
 
 from contextlib import contextmanager
 from typing import Any, Callable, Generator, List, Optional
 from unittest.mock import MagicMock, Mock
 
+from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.event import Event, StandardEventName
+from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.core.span import Span
 from nv_one_logger.core.time import TracingTimestamp
+
+from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
+
+
+def reset_singletong_providers_for_test() -> None:
+    """Reset the singleton providers for testing purposes."""
+    with SingletonMeta._lock:
+        SingletonMeta._instances.pop(TrainingTelemetryProvider, None)
+        SingletonMeta._instances.pop(OneLoggerProvider, None)
 
 
 def advance_time(mock_time: Mock, mock_perf_counter: Mock, seconds: float) -> TracingTimestamp:

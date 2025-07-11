@@ -18,6 +18,12 @@ The full license text can be found in `third_party_licenses/overrides_LICENSE.tx
 
 ---
 
+### [pydantic](https://docs.pydantic.dev/)  
+**License:** MIT License  
+The full license text can be found in `third_party_licenses/pydantic_LICENSE.txt`.
+
+---
+
 ### [pytest](https://docs.pytest.org/)  
 **License:** MIT License  
 The full license text can be found in `third_party_licenses/pytest_LICENSE.txt`.

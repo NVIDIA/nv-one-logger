@@ -43,6 +43,7 @@ from .utils import (
     assert_exporter_method_call_sequence,
     assert_only_start_stop_event,
     get_non_trivial_events,
+    reset_singletong_providers_for_test,
     span_from_export_start,
     span_from_export_stop,
 )
@@ -429,9 +430,8 @@ def test_validation_iteration_context(mock_exporter: MagicMock, mock_perf_counte
 def test_disabled_for_current_rank(config: TrainingTelemetryConfig, mock_exporter: MagicMock) -> None:
     """Test that the training telemetry is disabled for the current rank."""
     config.enable_for_current_rank = False
-    OneLoggerProvider.instance()._config = None  # type: ignore[protected-access]
-    OneLoggerProvider.instance()._recorder = None  # type: ignore[protected-access]
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    reset_singletong_providers_for_test()
+    (TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider())
 
     # Try a few context managers to make sure the provider is disabled.
     with application() as app_span:

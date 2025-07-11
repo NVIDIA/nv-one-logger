@@ -64,7 +64,6 @@ class OneLoggerProvider(metaclass=SingletonMeta["OneLoggerProvider"]):
             (not self._recorder or self._recorder is recorder) and (not self._config or self._config is config),
             "OneLoggerProvider already configured! You must call configure() once and only once.",
         )
-        config.validate_config()
         self._config = config
         self._recorder = recorder
 

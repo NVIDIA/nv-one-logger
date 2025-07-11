@@ -227,7 +227,10 @@ config = TrainingTelemetryConfig(
 )
 
 # configure the telemetry library and start the main() function
-TrainingTelemetryProvider.instance().configure(config=config, exporters=[FileExporter(file_path=Path("training_telemetry.json"))])
+(TrainingTelemetryBuilder()
+    .with_base_telemetry_config(config)
+    .with_exporter(FileExporter(file_path=Path("training_telemetry.json")))
+    .configure_provider())
 main()
 ```
 
@@ -243,7 +246,10 @@ Here is a simplified example:
 
 def main() -> None:
     # configure the telemetry library and start the main() function
-    TrainingTelemetryProvider.instance().configure(config=config, exporters=[FileExporter(file_path=Path("training_telemetry.json"))])
+  (TrainingTelemetryBuilder()
+      .with_base_telemetry_config(config)
+      .with_exporter(FileExporter(file_path=Path("training_telemetry.json")))
+      .configure_provider())
 
     on_app_start() # < ---- callback
 
@@ -275,13 +281,18 @@ have full access to the core API. Specifically,
 ```python
 def main() -> None:
     # configure the telemetry library and start the main() function
-    TrainingTelemetryProvider.instance().configure(
-        config=config, 
-        exporters=[FileExporter(file_path=Path("training_telemetry.json"))],
+    (TrainingTelemetryBuilder()
+        .with_base_telemetry_config(config)
+        .with_exporter(FileExporter(file_path=Path("training_telemetry.json")))
         # If you are creating custom spans, make sure you set the export_customization_mode and span_name_filter
         # such that such spans are exported.
-        export_customization_mode=ExportCustomizationMode.xxxx,
-        span_name_filter=[...])
+        .with_export_customization(export_customization_mode=ExportCustomizationMode.xxxx, 
+                                   span_name_filter=[...])
+        .configure_provider())
+    TrainingTelemetryProvider.instance().configure(
+        config=config, 
+        exporters=[],
+)
 
     ....
 

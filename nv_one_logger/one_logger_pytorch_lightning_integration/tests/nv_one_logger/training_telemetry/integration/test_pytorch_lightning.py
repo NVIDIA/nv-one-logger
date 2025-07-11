@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# pyright: reportPrivateUsage=false
 
 import os
 import shutil
@@ -9,6 +10,7 @@ import pytest
 import torch
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.exceptions import OneLoggerError
+from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.exporter.exporter import Exporter
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
@@ -98,7 +100,6 @@ def config() -> TrainingTelemetryConfig:
         session_tag_or_fn="test_session",
         enable_one_logger=True,
     )
-    config.validate_config()
     return config
 
 
@@ -116,9 +117,10 @@ def mock_exporter() -> Generator[Exporter, None, None]:
 def configure_provider(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
     """Fixture that configures the TrainingTelemetryProvider."""
     # Reset the state of the singletons
-    OneLoggerProvider.instance()._config = None  # type: ignore[reportPrivateUsage]
-    OneLoggerProvider.instance()._recorder = None  # type: ignore[reportPrivateUsage]
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    with SingletonMeta._lock:
+        SingletonMeta._instances.pop(TrainingTelemetryProvider, None)
+        SingletonMeta._instances.pop(OneLoggerProvider, None)
+    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider()
 
 
 @pytest.fixture
@@ -177,7 +179,7 @@ def test_one_logger_ptl_trainer(
         config (TrainingTelemetryConfig): Configuration for training telemetry
         checkpoints_dir (str): Path to the checkpoints directory.
     """
-    config.save_checkpoint_strategy = checkpoint_strategy
+    TrainingTelemetryProvider.instance().config.save_checkpoint_strategy = checkpoint_strategy
     train_loader, val_loader = dummy_data
 
     # Create the model and trainer
@@ -341,4 +343,5 @@ def test_explicit_telemetry_callback_invocation(
         if use_hook_trainer_cls:
             # Restore the original methods
             Trainer.__init__ = original_init
+            Trainer.save_checkpoint = original_save_checkpoint
             Trainer.save_checkpoint = original_save_checkpoint

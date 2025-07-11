@@ -18,7 +18,6 @@ def config() -> OneLoggerConfig:
         enable_one_logger=True,
     )
 
-    config.validate_config()
     return config
 
 

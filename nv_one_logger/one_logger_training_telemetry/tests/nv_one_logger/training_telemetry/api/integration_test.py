@@ -53,6 +53,7 @@ from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
+from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
 from .conftest import configure_provider_for_test
 from .utils import (
@@ -82,11 +83,12 @@ def _cur_ts(mock_time: Mock) -> int:
     return int(mock_time.return_value * 1000)
 
 
-def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock) -> None:
+def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock) -> None:
     """Tests the full lifecycle of a typical training job."""
     mock_time.return_value = STARTING_TIME
     mock_perf_counter.return_value = STARTING_PERF_COUNTER
 
+    config = TrainingTelemetryProvider.instance().config
     config.log_every_n_train_iterations = 2
     config.seq_length_or_fn = 1024
 

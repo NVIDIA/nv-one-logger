@@ -10,6 +10,8 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
+pydantic = "^2.10.6"
+overrides = "^7.7.0"
 StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python requirement to >= 3.11
 toml = "^0.10.2"
 typing-extensions = "^4.13.2"
@@ -24,7 +26,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.group.dev.dependencies]
 black = "^24.8.0"
 isort = "^5.13.2"
-overrides = "^7.7.0"
 pre-commit = "^3.5.0"
 mypy = "^1.14.1"
 pytest = "^8.3.4"

@@ -12,7 +12,7 @@ There are two approaches to integrate your PyTorch Lightning application with nv
  Using this method, several of the training events will be automatically captured. However, you still need to explicitly call the one logger API for other events. See [explicit vs implicit](#explicit-vs-implicit) section for more details.
 
 ```python
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter).configure_provider()
     ...
     HookedTrainer, nv_one_logger_callback = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
     # Instantiate using "HookedTrainer" passing it the same parameters you would pass to the regular Lightning Trainer.
@@ -45,7 +45,7 @@ Using this method, several of the training events will be automatically captured
 See [Explicit vs Implicit Telemetry Event Collection](#explicit-vs-implicit-telemetry-collection) section for more details.
 
 ```python
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter).configure_provider()
     ....
     trainer = OneLoggerPTLTrainer(
         trainer_config= {
@@ -149,7 +149,8 @@ def main():
         perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_session",
     )
-    TrainingTelemetryProvider.instance().configure(config=config, exporters=[FileExporter(file_path=Path("training_telemetry.json"))])
+    exporter = FileExporter(file_path=Path("training_telemetry.json"))
+    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter).configure_provider()
 
     # 2. Create and hook the Trainer class
     HookedTrainer = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())

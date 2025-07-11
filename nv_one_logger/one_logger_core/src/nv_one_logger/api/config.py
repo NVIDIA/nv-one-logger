@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Configuration for OneLogger."""
 
-from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, List, Literal, Optional, Union
 
+from pydantic import BaseModel, model_validator
 from strenum import StrEnum
 
 from nv_one_logger.core.attributes import AttributeValue
@@ -64,28 +64,28 @@ class ApplicationType(StrEnum):
     DATA_PROCESSING = "data_processing"
 
 
-@dataclass
-class LoggerConfig:
+class LoggerConfig(BaseModel):
     """Configuration for how OneLogger logs its messages and errors."""
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     log_format: str = "%(name)s - %(levelname)s - %(message)s"
 
-    """Path to the file where OneLogger INFO logs its messages."""
+    # Path to the file where OneLogger INFO logs its messages.
     log_file_path_for_info: Union[Path, str] = "onelogger.log"
 
-    """Path to the file where OneLogger ERROR logs its messages."""
+    # Path to the file where OneLogger ERROR logs its messages.
     log_file_path_for_err: Union[Path, str] = "onelogger.err"
 
-    def __post_init__(self) -> None:
-        """Validate that the log_level is one of the allowed values."""
+    @model_validator(mode="after")
+    def validate_config(self):
+        """Validate the logger config."""
         if self.log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
             raise ValueError(f"log_level must be one of {'DEBUG', 'INFO', 'WARNING', 'ERROR'}, got {self.log_level}")
+        return self
 
 
-@dataclass
-class OneLoggerConfig:
+class OneLoggerConfig(BaseModel):
     """Configuration for OneLogger."""
 
     # The unique name for application. This name is used to identify the telemetry data related to various executions of
@@ -165,17 +165,28 @@ class OneLoggerConfig:
     enable_one_logger: bool = True
 
     # Configuration for the logger used for logging messages and errors from the telemetry code.
-    logger_config: LoggerConfig = field(default_factory=LoggerConfig)
+    logger_config: LoggerConfig = LoggerConfig()
 
-    def validate_config(self) -> None:
-        """Validate the config.
+    @model_validator(mode="after")
+    def validate_config(self):
+        """Validate the OneLogger configuration.
 
-        Note: we are not using __post_init__ because we cannot reliably honor the
-            values set by user in error_handling_strategy while we are
-            constructing the config object. So instead, we call the validation
-            method explicitly in a context that can honor that setting.
+        This validator ensures that:
+        - application_name is not empty
+        - custom_metadata keys are valid strings (if provided)
+
+        Returns:
+            OneLoggerConfig: The validated configuration.
 
         Raises:
-        OneLoggerError: If any required field is not set or if validation fails.
+            ValueError: If the configuration is invalid.
         """
-        pass
+        if not self.application_name or not self.application_name.strip():
+            raise ValueError("application_name cannot be empty or whitespace-only")
+
+        if self.custom_metadata is not None:
+            for key in self.custom_metadata.keys():
+                if not key.strip():
+                    raise ValueError("custom_metadata keys must be non-empty strings")
+
+        return self

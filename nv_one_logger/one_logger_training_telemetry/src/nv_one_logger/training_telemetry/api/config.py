@@ -1,18 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
-from dataclasses import dataclass
+"""Configuration module for One Logger Training Telemetry."""
 from typing import Callable, Optional, Union
 
 from nv_one_logger.api.config import ApplicationType, OneLoggerConfig
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.utils import evaluate_value
-from overrides import override  # type: ignore
+from pydantic import model_validator
 
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 
 
-@dataclass
 class TrainingTelemetryConfig(OneLoggerConfig):
-    """Configuration for One Logger Training Telemetry."""
+    """Configuration for One Logger Training Telemetry.
+
+    This class extends the base OneLoggerConfig with training-specific configuration options including
+    world size, batch sizes, logging frequencies, and throughput-related settings.
+    """
 
     # Note: Since this dataclass inherits from OneLoggerConfig, which has some fields with
     # defaults values, all the fields in this dataclass need to have default values.
@@ -142,19 +145,21 @@ class TrainingTelemetryConfig(OneLoggerConfig):
         """Target number of training samples."""
         return evaluate_value(self.train_samples_target_or_fn)
 
-    @override
-    def validate_config(self) -> None:
-        """Validate the config.
+    @model_validator(mode="after")
+    def validate_training_telemetry_config(self):
+        """Validate the training telemetry configuration.
 
-        Note: we are not using __post_init__ because we cannot reliably honor the
-              values set by user in super().error_handling_strategy while we are
-              constructing the config object. So instead, we call the validation
-              method explicitly in a context that can honor that setting.
+        This validator ensures that:
+        - world_size is set to a non-zero value
+        - global_batch_size is set to a non-zero value
+        - flops_per_sample is set to a positive value when throughput logging is enabled
+
+        Returns:
+            TrainingTelemetryConfig: The validated configuration.
 
         Raises:
             OneLoggerError: If any required field is not set or if validation fails.
         """
-        super().validate_config()
         if self.world_size <= 0:
             raise OneLoggerError("world_size must be set to a non-zero value")
         if self.global_batch_size <= 0:
@@ -163,3 +168,5 @@ class TrainingTelemetryConfig(OneLoggerConfig):
         # Validate fields that are required only if throughput logging is enabled
         if self.is_log_throughput_enabled and (self.flops_per_sample is None or self.flops_per_sample <= 0):
             raise OneLoggerError("flops_per_sample must be set to a positive value when is_log_throughput_enabled is True")
+
+        return self

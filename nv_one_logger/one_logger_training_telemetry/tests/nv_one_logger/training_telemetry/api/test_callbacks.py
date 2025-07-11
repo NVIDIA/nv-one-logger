@@ -64,6 +64,7 @@ from .utils import (
     assert_only_start_stop_event,
     event_from_export_event,
     get_non_trivial_events,
+    reset_singletong_providers_for_test,
     span_from_export_start,
     span_from_export_stop,
 )
@@ -505,7 +506,7 @@ def test_save_sync_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_coun
 
 def test_save_async_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig) -> None:
     """Test that save sync checkpoint callbacks create and stop the appropriate spans and events."""
-    config.save_checkpoint_strategy = CheckPointStrategy.ASYNC
+    TrainingTelemetryProvider.instance().config.save_checkpoint_strategy = CheckPointStrategy.ASYNC
     global_step = 100
 
     train_span = on_train_start(
@@ -639,10 +640,12 @@ def test_training_start_end_with_single_iteration_callbacks(
     mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig
 ) -> None:
     """Test that training start/end callbacks create and stop the appropriate spans when we get callbacks for individual iterations."""
+    config = TrainingTelemetryProvider.instance().config
     config.log_every_n_train_iterations = 8
     config.flops_per_sample_or_fn = 100
     config.global_batch_size_or_fn = 32
     config.world_size_or_fn = 10
+    config.seq_length_or_fn = 1024
 
     expected_first_logged_train_iterations_finish_timestamp_sec = 0
 
@@ -650,8 +653,6 @@ def test_training_start_end_with_single_iteration_callbacks(
     # So the first iteration of the current run is iteration # 10.
     train_iterations_start = 10
     train_samples_start = 0
-
-    TrainingTelemetryProvider.instance().config.seq_length_or_fn = 1024
 
     on_train_start(
         train_iterations_start=train_iterations_start,
@@ -1024,9 +1025,8 @@ def test_optimizer_init_callbacks(
 def test_disabled_for_current_rank(config: TrainingTelemetryConfig, mock_exporter: MagicMock) -> None:
     """Test that the training telemetry is disabled for the current rank."""
     config.enable_for_current_rank = False
-    OneLoggerProvider.instance()._config = None  # type: ignore[protected-access]
-    OneLoggerProvider.instance()._recorder = None  # type: ignore[protected-access]
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    reset_singletong_providers_for_test()
+    (TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider())
 
     # Try a few callbacks to make sure the provider is disabled.
     assert on_app_start() is None

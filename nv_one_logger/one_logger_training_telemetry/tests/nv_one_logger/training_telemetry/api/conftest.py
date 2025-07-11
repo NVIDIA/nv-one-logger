@@ -3,21 +3,21 @@ from typing import Generator
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.exporter.exporter import Exporter
 
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
+from .utils import reset_singletong_providers_for_test
+
 
 def configure_provider_for_test(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
-    """Rest the state of the provider singleton for testing purposes."""
+    """Reset the state of the provider singleton for testing purposes."""
     # Do NOT change this to a fixture that gets called for all tests.
     # Some tests in this module create their own instances of Recorder. Calling this
     # function for those tests interferes with testing the Recorder in isolation.
-    OneLoggerProvider.instance()._config = None
-    OneLoggerProvider.instance()._recorder = None
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    reset_singletong_providers_for_test()
+    (TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider())
 
 
 @pytest.fixture
@@ -50,8 +50,9 @@ def config() -> TrainingTelemetryConfig:
         session_tag_or_fn="test_session",
         enable_one_logger=True,
         enable_for_current_rank=True,
+        train_iterations_target_or_fn=100,
+        train_samples_target_or_fn=3200,
     )
-    config.validate_config()
     return config
 
 

@@ -25,7 +25,6 @@ def test_basic_config_initialization() -> None:
         is_baseline_run_or_fn=False,
         save_checkpoint_strategy=CheckPointStrategy.SYNC,
     )
-    config.validate_config()
     assert config.world_size == 4
     assert config.global_batch_size == 32
     assert config.app_type == ApplicationType.TRAINING
@@ -52,8 +51,6 @@ def test_config_with_callable_values() -> None:
         is_baseline_run_or_fn=lambda: False,
         save_checkpoint_strategy=CheckPointStrategy.SYNC,
     )
-    # For callable values, we need to call them to get the actual value
-    config.validate_config()
     assert config.world_size == 8
     assert config.global_batch_size == 64
     assert config.perf_tag == "test_perf"
@@ -64,53 +61,50 @@ def test_config_with_callable_values() -> None:
 
 def test_invalid_world_size() -> None:
     """Test that initialization fails with invalid world_size."""
-    config = TrainingTelemetryConfig(
-        world_size_or_fn=0,
-        global_batch_size_or_fn=32,
-        application_name="test_app",
-        perf_tag_or_fn="test_perf",
-        session_tag_or_fn="test_session",
-        app_type_or_fn=ApplicationType.TRAINING,
-        is_baseline_run_or_fn=False,
-        save_checkpoint_strategy=CheckPointStrategy.SYNC,
-    )
     with pytest.raises(OneLoggerError, match="world_size must be set to a non-zero value"):
-        config.validate_config()
+        TrainingTelemetryConfig(
+            world_size_or_fn=0,
+            global_batch_size_or_fn=32,
+            application_name="test_app",
+            perf_tag_or_fn="test_perf",
+            session_tag_or_fn="test_session",
+            app_type_or_fn=ApplicationType.TRAINING,
+            is_baseline_run_or_fn=False,
+            save_checkpoint_strategy=CheckPointStrategy.SYNC,
+        )
 
 
 def test_invalid_global_batch_size() -> None:
     """Test that initialization fails with invalid global_batch_size."""
-    config = TrainingTelemetryConfig(
-        world_size_or_fn=4,
-        global_batch_size_or_fn=0,
-        application_name="test_app",
-        perf_tag_or_fn="test_perf",
-        session_tag_or_fn="test_session",
-        app_type_or_fn=ApplicationType.TRAINING,
-        is_baseline_run_or_fn=False,
-        save_checkpoint_strategy=CheckPointStrategy.SYNC,
-    )
     with pytest.raises(OneLoggerError, match="global_batch_size must be set to a non-zero value"):
-        config.validate_config()
+        TrainingTelemetryConfig(
+            world_size_or_fn=4,
+            global_batch_size_or_fn=0,
+            application_name="test_app",
+            perf_tag_or_fn="test_perf",
+            session_tag_or_fn="test_session",
+            app_type_or_fn=ApplicationType.TRAINING,
+            is_baseline_run_or_fn=False,
+            save_checkpoint_strategy=CheckPointStrategy.SYNC,
+        )
 
 
 def test_throughput_logging_validation() -> None:
     """Test validation of throughput logging related fields."""
-    config = TrainingTelemetryConfig(
-        world_size_or_fn=4,
-        global_batch_size_or_fn=32,
-        is_log_throughput_enabled_or_fn=True,
-        application_name="test_app",
-        perf_tag_or_fn="test_perf",
-        session_tag_or_fn="test_session",
-        app_type_or_fn=ApplicationType.TRAINING,
-        is_baseline_run_or_fn=False,
-        save_checkpoint_strategy=CheckPointStrategy.SYNC,
-        train_iterations_target_or_fn=1000,
-        train_samples_target_or_fn=10000,
-    )
     with pytest.raises(OneLoggerError, match="flops_per_sample must be set to a positive value when is_log_throughput_enabled is True"):
-        config.validate_config()
+        TrainingTelemetryConfig(
+            world_size_or_fn=4,
+            global_batch_size_or_fn=32,
+            is_log_throughput_enabled_or_fn=True,
+            application_name="test_app",
+            perf_tag_or_fn="test_perf",
+            session_tag_or_fn="test_session",
+            app_type_or_fn=ApplicationType.TRAINING,
+            is_baseline_run_or_fn=False,
+            save_checkpoint_strategy=CheckPointStrategy.SYNC,
+            train_iterations_target_or_fn=1000,
+            train_samples_target_or_fn=10000,
+        )
 
     # valid config with throughput logging
     config = TrainingTelemetryConfig(
@@ -127,7 +121,8 @@ def test_throughput_logging_validation() -> None:
         train_samples_target_or_fn=10000,
         flops_per_sample_or_fn=5,
     )
-    config.validate_config()
+    assert config.is_log_throughput_enabled is True
+    assert config.flops_per_sample == 5
 
     # valid config with throughput logging disabled
     config = TrainingTelemetryConfig(
@@ -141,4 +136,4 @@ def test_throughput_logging_validation() -> None:
         is_baseline_run_or_fn=False,
         save_checkpoint_strategy=CheckPointStrategy.SYNC,
     )
-    config.validate_config()
+    assert config.is_log_throughput_enabled is False

@@ -16,10 +16,10 @@ telemetry-build-prod-job:
     - merged
     - main
   image: 
-    name: python:3.8
+    name: python:3.10
   before_script:
     - echo "installing poetry."
-    - pip install poetry==1.8.5 wheel
+    - pip install poetry==2.0.1 wheel
     - echo "installing jq."
     - apt-get -qq update
     - apt-get install -y jq
@@ -45,10 +45,10 @@ telemetry-build-staging-job:
     - merged
     - develop
   image: 
-    name: python:3.8
+    name: python:3.10
   before_script:
     - echo "installing poetry."
-    - pip install poetry==1.8.5 wheel
+    - pip install poetry==2.0.1 wheel
     - echo "installing jq."
     - apt-get -qq update
     - apt-get install -y jq
@@ -71,11 +71,11 @@ telemetry-unit-tests:
   stage: test
   coverage: '/TOTAL.*\s+(\d+%)$/'
   image: 
-    name: python:3.8
+    name: python:3.10
   before_script:
   script:
     - echo "installing poetry."
-    - pip install poetry==1.8.5 wheel
+    - pip install poetry==2.0.1 wheel
     - cd nv_one_logger/one_logger_training_telemetry
     - echo "checking lint/format."
     - make check
@@ -87,7 +87,7 @@ telemetry-unit-tests:
 telemetry-pages:
   stage: doc
   needs: [telemetry-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
-  image: python:3.8
+  image: python:3.10
   script:
     - pip install -U sphinx
     - cd nv_one_logger/one_logger_training_telemetry

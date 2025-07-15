@@ -10,6 +10,7 @@ from nv_one_logger.api.config import ApplicationType, OneLoggerErrorHandlingStra
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.attributes import Attributes
 from nv_one_logger.core.event import Event
+from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.core.span import Span, StandardSpanName
 from nv_one_logger.core.time import TracingTimestamp
 from nv_one_logger.exporter.exporter import Exporter
@@ -120,9 +121,11 @@ def configure_provider(
 ) -> None:
     """Fixture that configures the TrainingTelemetryProvider."""
     # Reset the state of the singletons
-    OneLoggerProvider.instance()._config = None  # type: ignore[reportPrivateUsage]
-    OneLoggerProvider.instance()._recorder = None  # type: ignore[reportPrivateUsage]
-    TrainingTelemetryProvider.instance().configure(config, [mock_exporter])
+    # Reset the state of the singletons
+    with SingletonMeta._lock:
+        SingletonMeta._instances.pop(TrainingTelemetryProvider, None)
+        SingletonMeta._instances.pop(OneLoggerProvider, None)
+    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider()
 
 
 @pytest.fixture

@@ -93,7 +93,3 @@ class ConfigAdapter:
         elif v1_strategy == "async":
             return CheckPointStrategy.ASYNC
         raise OneLoggerError(f"Unsupported checkpoint strategy: {v1_strategy}. Must be 'sync' or 'async'")
-        raise OneLoggerError(f"Unsupported checkpoint strategy: {v1_strategy}. Must be 'sync' or 'async'")
-        raise OneLoggerError(f"Unsupported checkpoint strategy: {v1_strategy}. Must be 'sync' or 'async'")
-        raise OneLoggerError(f"Unsupported checkpoint strategy: {v1_strategy}. Must be 'sync' or 'async'")
-        raise OneLoggerError(f"Unsupported checkpoint strategy: {v1_strategy}. Must be 'sync' or 'async'")

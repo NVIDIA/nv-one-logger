@@ -34,4 +34,4 @@ def config() -> TrainingTelemetryConfig:
         train_iterations_target_or_fn=1000,
         train_samples_target_or_fn=10000,
     )
-    return training_telemetry_config 
+    return training_telemetry_config

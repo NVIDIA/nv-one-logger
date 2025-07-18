@@ -22,7 +22,7 @@ class ConfigAdapter:
 
     @staticmethod
     def convert_to_v2_config(v1_config: Dict[str, Any]) -> Tuple[TrainingTelemetryConfig, WandBConfig]:
-        """Converts the v1 config to the v2 config. See class docstring for more details.
+        """Convert the v1 config to the v2 config. See class docstring for more details.
 
         Args:
             v1_config (Dict[str, Any]): The v1 config.

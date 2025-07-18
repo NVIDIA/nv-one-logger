@@ -6,7 +6,7 @@ from unittest import mock
 from unittest.mock import MagicMock, Mock
 
 import pytest
-from nv_one_logger.api.config import ApplicationType, OneLoggerErrorHandlingStrategy
+from nv_one_logger.api.config import ApplicationType
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.attributes import Attributes
 from nv_one_logger.core.event import Event
@@ -59,9 +59,7 @@ def mock_perf_counter() -> Generator[mock.Mock, None, None]:
         yield mock_perf_counter
 
 
-def advance_time(
-    mock_time: mock.Mock, mock_perf_counter: mock.Mock, seconds: float
-) -> TracingTimestamp:
+def advance_time(mock_time: mock.Mock, mock_perf_counter: mock.Mock, seconds: float) -> TracingTimestamp:
     """Advances the mock time by the specified number of seconds and returns a TracingTimestamp corresponding to the new time   ."""
     mock_time.return_value += seconds
     mock_perf_counter.return_value += seconds
@@ -612,5 +610,5 @@ class TestV1CompatibleWandbExporterAdapter:
 
 @pytest.fixture
 def wandb_config() -> WandBConfig:
-    """Dummy wandb config."""
+    """Create Dummy wandb config."""
     return WandBConfig(entity="test_entity", project="test_project")

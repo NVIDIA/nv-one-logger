@@ -11,6 +11,7 @@ import hashlib
 import os
 import time
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, cast
+import uuid
 
 from nv_one_logger.core.event import ErrorEvent, Event
 from nv_one_logger.core.exceptions import OneLoggerError, assert_that
@@ -531,3 +532,54 @@ class V1CompatibleWandbExporterAsync(WandBExporterAsync):
     @override
     def export_error(self, event: ErrorEvent, span: Span) -> None:
         pass
+
+
+class V1CompatibleExporter:
+    """Factory class to create V1CompatibleWandbExporter instances.
+    
+    This class provides a unified interface for creating v1-compatible wandb exporters
+    that can work with either sync or async modes.
+    """
+    
+    def __init__(self, training_telemetry_config: TrainingTelemetryConfig, async_mode: bool = False):
+        """Initialize the V1CompatibleExporter.
+        
+        Args:
+            training_telemetry_config: The training telemetry configuration.
+            async_mode: If True, creates an async exporter. If False, creates a sync exporter.
+        """
+        self._training_telemetry_config = training_telemetry_config
+        self._async_mode = async_mode
+        
+        # Create the appropriate exporter config using v1-style configuration
+        self._exporter_config = WandBConfig(
+            host="https://api.wandb.ai",
+            api_key="",
+            project=training_telemetry_config.application_name,
+            run_name=f"{training_telemetry_config.application_name}-run-{str(uuid.uuid4())}",
+            entity="hwinf_dcm",  # NOTE: should always be 'hwinf_dcm' for internal user.
+            tags=["e2e_metrics_enabled"],
+            save_dir="./wandb",
+        )
+        
+        # Create the appropriate exporter based on async mode
+        if async_mode:
+            self._exporter = V1CompatibleWandbExporterAsync(
+                training_telemetry_config=training_telemetry_config,
+                wandb_config=self._exporter_config,
+            )
+        else:
+            self._exporter = V1CompatibleWandbExporterSync(
+                training_telemetry_config=training_telemetry_config,
+                wandb_config=self._exporter_config,
+            )
+    
+    @property
+    def exporter(self):
+        """Get the underlying exporter instance."""
+        return self._exporter
+    
+    @property
+    def is_async(self):
+        """Check if the exporter is in async mode."""
+        return self._async_mode

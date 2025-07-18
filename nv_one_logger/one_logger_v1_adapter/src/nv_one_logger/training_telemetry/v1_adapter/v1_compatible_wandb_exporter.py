@@ -10,8 +10,8 @@ it provides compatibility on the output path of v2: It allows using v2 config an
 import hashlib
 import os
 import time
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, cast
 import uuid
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, cast
 
 from nv_one_logger.core.event import ErrorEvent, Event
 from nv_one_logger.core.exceptions import OneLoggerError, assert_that
@@ -50,7 +50,7 @@ class _MetricMapping(NamedTuple):
 
 
 def _build_metrics(mappings: List[_MetricMapping]) -> Dict[str, Any]:
-    """Builds a dictionary of metrics from a list of metric mappings.
+    """Build a dictionary of metrics from a list of metric mappings.
 
     Args:
         mappings (List[_MetricMapping]): Mapping from v1 metric name to value and coefficient. If the value is None, the metric will be omitted.
@@ -85,6 +85,7 @@ class V1CompatibleWandbExporterAdapter:
         self._training_telemetry_config = training_telemetry_config
 
     def extract_v1_metrics_for_span_start(self, span: Span) -> dict[str, Any]:
+        """Extract v1 metrics for a span start event."""
         assert_that(
             span.stop_event is None,
             f"the span must be an active span but it is stopped. {span}",
@@ -104,6 +105,7 @@ class V1CompatibleWandbExporterAdapter:
         return {}
 
     def extract_v1_metrics_for_span_stop(self, span: Span) -> dict[str, Any]:
+        """Extract v1 metrics for a span stop event."""
         assert_that(span.stop_event, f"the span must be have a stop event. {span}")
         mapping: dict[SpanName, Callable[[Span], dict[str, Any]]] = {
             StandardSpanName.APPLICATION: self._metrics_for_app_stop,
@@ -121,6 +123,7 @@ class V1CompatibleWandbExporterAdapter:
         return {}
 
     def extract_v1_metrics_for_event(self, event: Event, span: Span) -> dict[str, Any]:
+        """Extract v1 metrics for an event."""
         mapping: dict[StandardTrainingJobEventName, Callable[[Event, Span], dict[str, Any]]] = {
             StandardTrainingJobEventName.ONE_LOGGER_INITIALIZATION: self._metrics_for_one_logger_initilzation_event,
             StandardTrainingJobEventName.TRAINING_METRICS_UPDATE: self._metrics_for_training_metrics_update_event,
@@ -133,6 +136,7 @@ class V1CompatibleWandbExporterAdapter:
         return {}
 
     def _metrics_for_one_logger_initilzation_event(self, event: Event, span: Span) -> dict[str, Any]:
+        """Extract v1 metrics for a one logger initialization event."""
         assert_that(
             span.name == StandardSpanName.APPLICATION,
             "Expected span name to be APPLICATION",
@@ -478,21 +482,25 @@ class V1CompatibleWandbExporterSync(WandBExporterSync):
 
     @override
     def export_start(self, span: Span) -> None:
+        """Export v1 metrics for a span start event."""
         metrics = self.adapter.extract_v1_metrics_for_span_start(span)
         self._log_metrics(metrics)
 
     @override
     def export_stop(self, span: Span) -> None:
+        """Export v1 metrics for a span stop event."""
         metrics = self.adapter.extract_v1_metrics_for_span_stop(span)
         self._log_metrics(metrics)
 
     @override
     def export_event(self, event: Event, span: Span) -> None:
+        """Export v1 metrics for an event."""
         metrics = self.adapter.extract_v1_metrics_for_event(event, span)
         self._log_metrics(metrics)
 
     @override
     def export_error(self, event: ErrorEvent, span: Span) -> None:
+        """Export v1 metrics for an error event."""
         pass
 
 
@@ -516,41 +524,45 @@ class V1CompatibleWandbExporterAsync(WandBExporterAsync):
 
     @override
     def export_start(self, span: Span) -> None:
+        """Export v1 metrics for a span start event."""
         metrics = self.adapter.extract_v1_metrics_for_span_start(span)
         self._log_metrics(metrics)
 
     @override
     def export_stop(self, span: Span) -> None:
+        """Export v1 metrics for a span stop event."""
         metrics = self.adapter.extract_v1_metrics_for_span_stop(span)
         self._log_metrics(metrics)
 
     @override
     def export_event(self, event: Event, span: Span) -> None:
+        """Export v1 metrics for an event."""
         metrics = self.adapter.extract_v1_metrics_for_event(event, span)
         self._log_metrics(metrics)
 
     @override
     def export_error(self, event: ErrorEvent, span: Span) -> None:
+        """Export v1 metrics for an error event."""
         pass
 
 
 class V1CompatibleExporter:
     """Factory class to create V1CompatibleWandbExporter instances.
-    
+
     This class provides a unified interface for creating v1-compatible wandb exporters
     that can work with either sync or async modes.
     """
-    
+
     def __init__(self, training_telemetry_config: TrainingTelemetryConfig, async_mode: bool = False):
         """Initialize the V1CompatibleExporter.
-        
+
         Args:
             training_telemetry_config: The training telemetry configuration.
             async_mode: If True, creates an async exporter. If False, creates a sync exporter.
         """
         self._training_telemetry_config = training_telemetry_config
         self._async_mode = async_mode
-        
+
         # Create the appropriate exporter config using v1-style configuration
         self._exporter_config = WandBConfig(
             host="https://api.wandb.ai",
@@ -561,7 +573,7 @@ class V1CompatibleExporter:
             tags=["e2e_metrics_enabled"],
             save_dir="./wandb",
         )
-        
+
         # Create the appropriate exporter based on async mode
         if async_mode:
             self._exporter = V1CompatibleWandbExporterAsync(
@@ -573,12 +585,12 @@ class V1CompatibleExporter:
                 training_telemetry_config=training_telemetry_config,
                 wandb_config=self._exporter_config,
             )
-    
+
     @property
     def exporter(self):
         """Get the underlying exporter instance."""
         return self._exporter
-    
+
     @property
     def is_async(self):
         """Check if the exporter is in async mode."""

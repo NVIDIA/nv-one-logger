@@ -1,17 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # pyright: reportPrivateUsage=false
-import uuid
-from unittest import mock
-from unittest.mock import MagicMock, Mock
 
 import pytest
-from nv_one_logger.api.config import ApplicationType, OneLoggerErrorHandlingStrategy
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.internal.singleton import SingletonMeta
-from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
-from nv_one_logger.wandb.exporter.wandb_exporter import Config as WandBConfig
 
 from nv_one_logger.training_telemetry.v1_adapter.v1_compatible_wandb_exporter import (
     V1CompatibleExporter,
@@ -41,20 +35,20 @@ class TestV1CompatibleExporter:
     def test_factory_creates_sync_exporter(self, config: TrainingTelemetryConfig) -> None:
         """Test that factory creates V1CompatibleWandbExporterSync when async_mode=False."""
         exporter = V1CompatibleExporter(config, async_mode=False)
-        
+
         assert exporter.is_async is False
         assert isinstance(exporter.exporter, V1CompatibleWandbExporterSync)
 
     def test_factory_creates_async_exporter(self, config: TrainingTelemetryConfig) -> None:
         """Test that factory creates V1CompatibleWandbExporterAsync when async_mode=True."""
         exporter = V1CompatibleExporter(config, async_mode=True)
-        
+
         assert exporter.is_async is True
         assert isinstance(exporter.exporter, V1CompatibleWandbExporterAsync)
 
     def test_factory_default_creates_sync_exporter(self, config: TrainingTelemetryConfig) -> None:
         """Test that factory creates sync exporter by default."""
         exporter = V1CompatibleExporter(config)
-        
+
         assert exporter.is_async is False
-        assert isinstance(exporter.exporter, V1CompatibleWandbExporterSync) 
+        assert isinstance(exporter.exporter, V1CompatibleWandbExporterSync)

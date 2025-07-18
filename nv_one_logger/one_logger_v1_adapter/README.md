@@ -4,3 +4,61 @@ In particular,
 
 - It provides an adapter to convert v1 config to v2 config.
 - It provides exporters that export telemetry data to the v1 backend (wandb) and ensures the metric names/format are the same so that the downstream consumers of telemetry data are not affected.
+- It provides a unified `V1CompatibleExporter` factory class for creating v1-compatible exporters.
+
+## V1CompatibleExporter API
+
+The `V1CompatibleExporter` class provides a unified interface for creating v1-compatible wandb exporters that can work with either sync or async modes.
+
+### Basic Usage
+
+```python
+from nv_one_logger.training_telemetry.v1_adapter import V1CompatibleExporter
+from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
+
+# Create a training telemetry config
+config = TrainingTelemetryConfig(
+    application_name="my_app",
+    perf_tag_or_fn="my_perf_tag",
+    session_tag_or_fn="my_session",
+    # ... other config parameters
+)
+
+# Create a sync exporter
+exporter = V1CompatibleExporter(
+    training_telemetry_config=config,
+    async_mode=False  # Use sync mode
+)
+
+# Create an async exporter
+exporter = V1CompatibleExporter(
+    training_telemetry_config=config,
+    async_mode=True  # Use async mode
+)
+
+# Configure the TrainingTelemetryProvider
+TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter.exporter).configure_provider()
+```
+
+### Configuration
+
+The `V1CompatibleExporter` automatically creates a `WandBConfig` with v1-compatible settings:
+
+- **entity**: Always set to `"hwinf_dcm"` for internal users
+- **project**: Uses `training_telemetry_config.application_name`
+- **run_name**: Auto-generated with format `"{application_name}-run-{uuid}"`
+- **host**: Set to `"https://api.wandb.ai"`
+- **api_key**: Empty string (uses anonymous login)
+- **tags**: Set to `["e2e_metrics_enabled"]`
+- **save_dir**: Set to `"./wandb"`
+
+### Properties
+
+The `V1CompatibleExporter` provides the following properties:
+
+- `exporter`: The underlying exporter instance (`V1CompatibleWandbExporterSync` or `V1CompatibleWandbExporterAsync`)
+- `training_telemetry_config`: The training telemetry configuration
+- `exporter_config`: The automatically created `WandBConfig`
+- `is_async`: Boolean indicating if the exporter is in async mode
+

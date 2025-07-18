@@ -9,7 +9,7 @@ for training-related telemetry data.
 import os
 import socket
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, cast
 
 from nv_one_logger.core.attributes import Attributes
 from nv_one_logger.core.event import Event
@@ -34,7 +34,7 @@ from nv_one_logger.training_telemetry.api.attributes import (
     ValidationMetricsUpdateAttributes,
 )
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 
@@ -351,12 +351,8 @@ class TrainingRecorder(DefaultRecorder):
         attributes = OneLoggerInitializationAttributes.create(
             one_logger_training_telemetry_version=get_version("one-logger-training-telemetry"),
             enable_for_current_rank=conf.enable_for_current_rank,
-            perf_tag=conf.perf_tag,
             session_tag=conf.session_tag,
             app_type=conf.app_type,
-            log_every_n_train_iterations=conf.log_every_n_train_iterations,
-            world_size=conf.world_size,
-            global_batch_size=conf.global_batch_size,
             is_baseline_run=conf.is_baseline_run,
             is_train_iterations_enabled=conf.is_train_iterations_enabled,
             is_validation_iterations_enabled=conf.is_validation_iterations_enabled,
@@ -366,8 +362,6 @@ class TrainingRecorder(DefaultRecorder):
             summary_data_schema_version=conf.summary_data_schema_version,
             rank=_get_rank(),
             checkpoint_strategy=conf.save_checkpoint_strategy,
-            micro_batch_size=conf.micro_batch_size,
-            seq_length=conf.seq_length,
             custom_metadata=conf.custom_metadata,
             node_name=socket.gethostname(),
         )
@@ -533,6 +527,14 @@ class TrainingRecorder(DefaultRecorder):
             train_samples_start >= 0,
             f"Invalid value for train_samples_start in TrainingLoopAttributes object: {train_samples_start}",
         )
+        if self._config.training_loop_config is None:
+            raise OneLoggerError(
+                "'training_loop_config' field of TrainingTelemetryConfig must be set before the start of training. "
+                "See the documentation for TrainingTelemetryProvider.set_training_loop_config for more details."
+            )
+
+        training_loop_config = self._config.training_loop_config
+
         if not start_time:
             start_time = TracingTimestamp.now()
 
@@ -548,24 +550,30 @@ class TrainingRecorder(DefaultRecorder):
         state.testing_interval_start = state.completed_training_iterations_overall
         if self._config.is_log_throughput_enabled:
             assert_that(
-                self._config.flops_per_sample and self._config.flops_per_sample > 0,
+                training_loop_config.flops_per_sample and training_loop_config.flops_per_sample > 0,
                 "flops_per_sample must be set to a positive value when is_log_throughput_enabled is True",
             )
             # The initial value of completed_floating_point_operations_overall is nonzero if loading ckpt, whereas total_flops_current_job
             # is always initialized to zero. For example, if train_iterations_start is 1,  it means that one iteration (iteration 0) has
             # been completed in a previous run.
-            state.completed_floating_point_operations_overall = (
-                train_iterations_start * self._config.global_batch_size * self._config.flops_per_sample
-            )  # type: ignore
+            state.completed_floating_point_operations_overall = cast(
+                int, train_iterations_start * training_loop_config.global_batch_size * training_loop_config.flops_per_sample  # type: ignore
+            )
             state.total_flops_current_job = 0
 
         # Step 2: Create the span.
         span_attributes = TrainingLoopAttributes.create(
+            perf_tag=training_loop_config.perf_tag,
+            log_every_n_train_iterations=training_loop_config.log_every_n_train_iterations,
+            world_size=training_loop_config.world_size,
+            global_batch_size=training_loop_config.global_batch_size,
             train_iterations_start=train_iterations_start,
             train_samples_start=train_samples_start,
             train_iterations_target=train_iterations_target,
             train_samples_target=train_samples_target,
             train_tokens_target=train_tokens_target,
+            micro_batch_size=training_loop_config.micro_batch_size,
+            seq_length=training_loop_config.seq_length,
             completed_floating_point_operations_overall=state.completed_floating_point_operations_overall,
         )
         return self.start(
@@ -609,14 +617,18 @@ class TrainingRecorder(DefaultRecorder):
         Args:
             stop_time: The timestamp of the end of the training iteration.
         """
+        training_loop_config = self._config.training_loop_config
+        assert_that(training_loop_config is not None, "TrainingLoopConfig.training_loop_config must be set before starting the training loop.")
+        training_loop_config = cast(TrainingLoopConfig, training_loop_config)  # Needed to silence mypy warnings about training_loop_config being Optional.
+
         # Step 1: Update the state.
         training_iteration_timer = self._training_state.multi_iteration_timers[StandardTrainingJobSpanName.TRAINING_SINGLE_ITERATION]
         training_iteration_timer.stop(stop_time)
 
         self._training_state.completed_training_iterations_overall += 1
-        self._training_state.train_samples_processed_current_job += self._config.global_batch_size
-        if self._config.seq_length:
-            self._training_state.train_tokens_current_job = self._config.seq_length * self._training_state.train_samples_processed_current_job
+        self._training_state.train_samples_processed_current_job += training_loop_config.global_batch_size
+        if training_loop_config.seq_length:
+            self._training_state.train_tokens_current_job = training_loop_config.seq_length * self._training_state.train_samples_processed_current_job
 
         self._training_state.last_logged_train_iterations_finish_time = stop_time
         if not self._training_state.first_logged_train_iterations_finish_time:
@@ -624,10 +636,10 @@ class TrainingRecorder(DefaultRecorder):
 
         if self._config.is_log_throughput_enabled:
             assert_that(
-                self._config.flops_per_sample and self._config.flops_per_sample > 0,
+                training_loop_config.flops_per_sample and training_loop_config.flops_per_sample > 0,
                 "flops_per_sample must be set to a positive value when is_log_throughput_enabled is True",
             )
-            flops = self._config.global_batch_size * self._config.flops_per_sample  # type: ignore[reportOperatorIssue]
+            flops = training_loop_config.global_batch_size * training_loop_config.flops_per_sample  # type: ignore[reportOperatorIssue]
             assert_that(
                 self._training_state.completed_floating_point_operations_overall is not None, "completed_floating_point_operations_overall must be initialized."
             )
@@ -635,8 +647,10 @@ class TrainingRecorder(DefaultRecorder):
             self._training_state.total_flops_current_job += flops
             train_iterations_time_total = training_iteration_timer.total_time_sec
             assert_that(train_iterations_time_total > 0, "train_iterations_time_total must be greater than 0")
-            assert_that(self._config.world_size > 0, "world_size must be greater than 0")
-            train_throughput_per_gpu = float(self._training_state.total_flops_current_job) / (train_iterations_time_total * 10**12 * self._config.world_size)
+            assert_that(training_loop_config.world_size > 0, "world_size must be greater than 0")
+            train_throughput_per_gpu = float(self._training_state.total_flops_current_job) / (
+                train_iterations_time_total * 10**12 * training_loop_config.world_size
+            )
             self._training_state.tflops_per_gpu.add_value(train_throughput_per_gpu)
 
         # Step 2: Send updated telemetry data on training every N train iterations.
@@ -655,7 +669,8 @@ class TrainingRecorder(DefaultRecorder):
         latest_iteration = self._training_state.completed_training_iterations_overall - 1
         # We are adding 1 to latest_iteration to make this compatible with the previous implementation, which logged
         # metrics on the iteration before iterations that are multiple of log_every_n_train_iterations.
-        if latest_iteration > 0 and (latest_iteration + 1) % self._config.log_every_n_train_iterations == 0:
+        log_every_n_train_iterations = self._config.training_loop_config.log_every_n_train_iterations  # type: ignore[reportOptionalMemberAccess]
+        if latest_iteration > 0 and (latest_iteration + 1) % log_every_n_train_iterations == 0:
             training_loop_span = self._get_active_span(StandardTrainingJobSpanName.TRAINING_LOOP)
             training_iteration_timer = self._training_state.multi_iteration_timers[StandardTrainingJobSpanName.TRAINING_SINGLE_ITERATION]
             attributes = TrainingMetricsUpdateAttributes.create(
@@ -664,7 +679,7 @@ class TrainingRecorder(DefaultRecorder):
                 num_iterations=training_iteration_timer.total_window_count,
                 train_samples_start=self._training_state.train_samples_start,
                 num_train_samples=self._training_state.train_samples_processed_current_job,
-                interval=self._config.log_every_n_train_iterations,
+                interval=log_every_n_train_iterations,
                 avg_iteration_time_sec=training_iteration_timer.avg_window_duration_sec,
                 min_iteration_time_sec=training_iteration_timer.min_window_duration_sec,
                 max_iteration_time_sec=training_iteration_timer.max_window_duration_sec,
@@ -885,15 +900,14 @@ class TrainingRecorder(DefaultRecorder):
             return
 
         # Step 1: Update the state.
-        conf = self._config
         parent_span = None
         # See comments on StandardTrainingJobEventName.SAVE_CHECKPOINT_SUCCESS.
-        if conf.save_checkpoint_strategy == CheckPointStrategy.SYNC:
+        if self._config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
             parent_span = self._get_active_span(StandardTrainingJobSpanName.CHECKPOINT_SAVE_SYNC)
-        elif conf.save_checkpoint_strategy == CheckPointStrategy.ASYNC:
+        elif self._config.save_checkpoint_strategy == CheckPointStrategy.ASYNC:
             parent_span = self._get_active_span(StandardTrainingJobSpanName.TRAINING_LOOP)
         else:
-            raise OneLoggerError(f"Invalid checkpoint strategy: {conf.save_checkpoint_strategy}")
+            raise OneLoggerError(f"Invalid checkpoint strategy: {self._config.save_checkpoint_strategy}")
 
         state = self._training_state
         state.successful_save_checkpoint_count_current_job += 1
@@ -916,7 +930,7 @@ class TrainingRecorder(DefaultRecorder):
 
         # Step 2: Create the event.
         event_attributes = SaveCheckpointSuccessEventAttributes.create(
-            checkpoint_strategy=conf.save_checkpoint_strategy,
+            checkpoint_strategy=self._config.save_checkpoint_strategy,
             current_iteration=current_iteration,
             first_successful_save_checkpoint_timestamp_sec=state.first_save_checkpoint_success_time.seconds_since_epoch,
             latest_successful_save_checkpoint_timestamp_sec=state.latest_save_checkpoint_success_time.seconds_since_epoch,

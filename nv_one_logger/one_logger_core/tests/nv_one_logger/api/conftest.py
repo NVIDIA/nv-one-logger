@@ -26,7 +26,6 @@ def config() -> OneLoggerConfig:
     """Create a configuration for OneLogger."""
     config = OneLoggerConfig(
         application_name="test_app",
-        perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_task",
         app_type_or_fn=ApplicationType.TRAINING,
         enable_one_logger=True,

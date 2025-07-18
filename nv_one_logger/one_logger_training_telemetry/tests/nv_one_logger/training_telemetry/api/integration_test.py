@@ -9,7 +9,6 @@ import socket
 from typing import Any, Callable, List
 from unittest.mock import MagicMock, Mock
 
-import pytest
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.attributes import Attributes
 from nv_one_logger.core.event import StandardEventAttributeName
@@ -53,9 +52,8 @@ from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
-from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
-from .conftest import configure_provider_for_test
+from .conftest import reconfigure_provider
 from .utils import (
     advance_time,
     assert_exporter_method_call_sequence,
@@ -68,13 +66,6 @@ from .utils import (
     span_from_export_stop,
 )
 
-
-@pytest.fixture(autouse=True)
-def configure_provider(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
-    """Fixture that configures the TrainingTelemetryProvider."""
-    configure_provider_for_test(config, mock_exporter)
-
-
 STARTING_PERF_COUNTER = 200
 STARTING_TIME = 5000
 
@@ -83,15 +74,19 @@ def _cur_ts(mock_time: Mock) -> int:
     return int(mock_time.return_value * 1000)
 
 
-def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock) -> None:
+def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock) -> None:
     """Tests the full lifecycle of a typical training job."""
     mock_time.return_value = STARTING_TIME
     mock_perf_counter.return_value = STARTING_PERF_COUNTER
 
-    config = TrainingTelemetryProvider.instance().config
-    config.log_every_n_train_iterations = 2
-    config.seq_length_or_fn = 1024
+    assert config.training_loop_config is not None
+    config.training_loop_config.log_every_n_train_iterations = 2
+    config.training_loop_config.seq_length_or_fn = 1024
+    reconfigure_provider(config, mock_exporter)
 
+    global_batch_size = config.training_loop_config.global_batch_size
+    flops_per_sample = config.training_loop_config.flops_per_sample
+    world_size = config.training_loop_config.world_size
     train_iterations_start = 100
     num_train_iterations = 11
     checkpoint_interval = 3
@@ -108,14 +103,10 @@ def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_ti
     event = event_from_export_event(mock_exporter, app_span)
     assert event.name == StandardTrainingJobEventName.ONE_LOGGER_INITIALIZATION
     assert event.attributes == OneLoggerInitializationAttributes.create(
-        one_logger_training_telemetry_version="2.0.0",
+        one_logger_training_telemetry_version="2.0.1",
         enable_for_current_rank=config.enable_for_current_rank,
-        perf_tag=config.perf_tag,
         session_tag=config.session_tag,
         app_type=config.app_type,
-        log_every_n_train_iterations=config.log_every_n_train_iterations,
-        world_size=config.world_size,
-        global_batch_size=config.global_batch_size,
         is_baseline_run=config.is_baseline_run,
         is_train_iterations_enabled=config.is_train_iterations_enabled,
         is_validation_iterations_enabled=config.is_validation_iterations_enabled,
@@ -124,9 +115,8 @@ def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_ti
         is_log_throughput_enabled=config.is_log_throughput_enabled,
         node_name=socket.gethostname(),
         rank=0,
+        checkpoint_strategy=config.save_checkpoint_strategy,
         summary_data_schema_version=config.summary_data_schema_version,
-        checkpoint_strategy=CheckPointStrategy.SYNC,
-        seq_length=config.seq_length,
     ).add(StandardEventAttributeName.TIMESTAMP_MSEC, 5000000)
 
     expected_calls.append(Exporter.export_start)
@@ -214,12 +204,17 @@ def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_ti
     training_loop_span = span
     assert span.name == StandardTrainingJobSpanName.TRAINING_LOOP
     assert span.attributes == TrainingLoopAttributes.create(
+        perf_tag=config.training_loop_config.perf_tag,
+        log_every_n_train_iterations=config.training_loop_config.log_every_n_train_iterations,
+        world_size=world_size,
+        global_batch_size=global_batch_size,
         train_iterations_start=train_iterations_start,
         train_iterations_target=1000,
         train_samples_start=3200,
         train_samples_target=32000,
         train_tokens_target=32000 * 1024,  # train_samples_target * seq_length
         completed_floating_point_operations_overall=320000,  # 10 iterations in the loaded checkpoint * 32 samples per iteration * 100 flops per sample
+        seq_length=config.training_loop_config.seq_length,
     )
     assert_only_start_event(span)
     assert span.start_event.attributes == Attributes({StandardEventAttributeName.TIMESTAMP_MSEC: _cur_ts(mock_time)})
@@ -251,9 +246,7 @@ def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_ti
         else:
             advance_time(mock_time, mock_perf_counter, 500.0)
             expected_total_iteration_time_sec += 500.0
-        expected_train_throughput_per_gpu = (
-            config.global_batch_size * config.flops_per_sample * (iteration + 1) / (expected_total_iteration_time_sec * 10**12 * config.world_size)
-        )
+        expected_train_throughput_per_gpu = global_batch_size * flops_per_sample * (iteration + 1) / (expected_total_iteration_time_sec * 10**12 * world_size)
         expected_train_throughput_per_gpu_min = min(expected_train_throughput_per_gpu_min, expected_train_throughput_per_gpu)
         expected_train_throughput_per_gpu_max = max(expected_train_throughput_per_gpu_max, expected_train_throughput_per_gpu)
         prev_export_count = len(mock_exporter.mock_calls)
@@ -263,7 +256,7 @@ def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_ti
         latest_iteration_finish_ts = TracingTimestamp.now()
 
         # We send out metrics every N iterations where n=log_every_n_train_iterations
-        if cur_iteration > 0 and (cur_iteration + 1) % config.log_every_n_train_iterations == 0:
+        if cur_iteration > 0 and (cur_iteration + 1) % config.training_loop_config.log_every_n_train_iterations == 0:
             expected_calls.append(Exporter.export_event)  # For TRAINING_METRICS_UPDATE event
             event = event_from_export_event(mock_exporter, training_loop_span)
             assert event.name == StandardTrainingJobEventName.TRAINING_METRICS_UPDATE
@@ -275,15 +268,15 @@ def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_ti
                 current_iteration=cur_iteration,
                 num_iterations=iteration + 1,
                 train_samples_start=3200,
-                num_train_samples=(iteration + 1) * config.global_batch_size,
-                interval=config.log_every_n_train_iterations,
+                num_train_samples=(iteration + 1) * global_batch_size,
+                interval=config.training_loop_config.log_every_n_train_iterations,
                 avg_iteration_time_sec=(expected_total_iteration_time_sec / (iteration + 1)),
                 min_iteration_time_sec=400.0,
                 max_iteration_time_sec=500.0 if iteration > 0 else 400.0,
                 total_iteration_time_sec=expected_total_iteration_time_sec,
-                train_tokens=config.global_batch_size * config.seq_length * (iteration + 1),
-                completed_floating_point_operations_overall=(cur_iteration + 1) * config.global_batch_size * config.flops_per_sample,
-                total_flops=config.global_batch_size * config.flops_per_sample * (iteration + 1),
+                train_tokens=global_batch_size * config.training_loop_config.seq_length * (iteration + 1),
+                completed_floating_point_operations_overall=(cur_iteration + 1) * global_batch_size * flops_per_sample,
+                total_flops=global_batch_size * flops_per_sample * (iteration + 1),
                 train_throughput_per_gpu=expected_train_throughput_per_gpu,
                 train_throughput_per_gpu_max=expected_train_throughput_per_gpu_max,
                 train_throughput_per_gpu_min=expected_train_throughput_per_gpu_min,
@@ -321,10 +314,10 @@ def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_ti
                 save_checkpoint_success_count=expected_saved_checkpoints_so_far,
                 training_start_timestamp_sec=training_loop_start.seconds_since_epoch,
                 productive_train_iterations=cur_iteration + 1,
-                productive_train_samples=config.global_batch_size * (cur_iteration + 1),
+                productive_train_samples=global_batch_size * (cur_iteration + 1),
                 productive_train_iterations_sec=expected_total_iteration_time_sec,
                 productive_validation_iterations_sec=expected_validation_time_sec,
-                productive_train_tflops=config.global_batch_size * config.flops_per_sample * (cur_iteration + 1) / 10**12,
+                productive_train_tflops=global_batch_size * flops_per_sample * (cur_iteration + 1) / 10**12,
             )
             expected_ev_attributes.add(StandardEventAttributeName.TIMESTAMP_MSEC, _cur_ts(mock_time))
             assert event.attributes == expected_ev_attributes
@@ -435,7 +428,7 @@ def test_training_e2e(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_ti
 def test_training_e2e_disabled_for_current_rank(config: TrainingTelemetryConfig, mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock) -> None:
     """Tests the full lifecycle of a typical training job with training telemetry disabled for the current rank."""
     config.enable_for_current_rank = False
-    configure_provider_for_test(config, mock_exporter)
+    reconfigure_provider(config, mock_exporter)
 
     mock_time.return_value = STARTING_TIME
     mock_perf_counter.return_value = STARTING_PERF_COUNTER

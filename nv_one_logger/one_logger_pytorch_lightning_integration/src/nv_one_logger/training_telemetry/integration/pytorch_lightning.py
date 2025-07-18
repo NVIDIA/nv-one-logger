@@ -70,7 +70,13 @@ class TimeEventCallback(Callback):
     @override
     def on_train_start(self, trainer: ptl.Trainer, pl_module: ptl.LightningModule) -> None:
         """Execute when the train begins."""
-        on_train_start(train_iterations_start=trainer.global_step, train_samples_start=trainer.global_step * self._provider.config.global_batch_size)
+        if self._provider.config.training_loop_config is None:
+            raise OneLoggerError(
+                "'training_loop_config' field of TrainingTelemetryConfig must be set before the start of training. "
+                "See the documentation for TrainingTelemetryProvider.set_training_loop_config for more details."
+            )
+        global_batch_size = self._provider.config.training_loop_config.global_batch_size
+        on_train_start(train_iterations_start=trainer.global_step, train_samples_start=trainer.global_step * global_batch_size)
 
     @override
     def on_train_end(self, trainer: ptl.Trainer, pl_module: ptl.LightningModule) -> None:

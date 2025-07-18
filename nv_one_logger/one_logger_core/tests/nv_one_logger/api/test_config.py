@@ -20,13 +20,11 @@ def test_one_logger_config_default_values() -> None:
     """Test OneLoggerConfig default values."""
     config = OneLoggerConfig(
         application_name="test_app",
-        perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_task",
         app_type_or_fn=ApplicationType.TRAINING,
     )
 
     assert config.application_name == "test_app"
-    assert config.perf_tag == "test_perf"
     assert config.session_tag == "test_task"
     assert config.app_type == ApplicationType.TRAINING
     assert not config.is_baseline_run
@@ -39,9 +37,6 @@ def test_one_logger_config_default_values() -> None:
 def test_one_logger_config_with_callables() -> None:
     """Test OneLoggerConfig with callable values."""
 
-    def get_perf_tag() -> str:
-        return "dynamic_version2_batchsize128"
-
     def get_session_tag() -> str:
         return "dynamic_task"
 
@@ -53,13 +48,11 @@ def test_one_logger_config_with_callables() -> None:
 
     config = OneLoggerConfig(
         application_name="test_app",
-        perf_tag_or_fn=get_perf_tag,
         session_tag_or_fn=get_session_tag,
         app_type_or_fn=get_app_type,
         is_baseline_run_or_fn=get_is_baseline,
     )
 
-    assert config.perf_tag == "dynamic_version2_batchsize128"
     assert config.session_tag == "dynamic_task"
     assert config.app_type == ApplicationType.VALIDATION
     assert config.is_baseline_run is True
@@ -71,7 +64,6 @@ def test_one_logger_config_with_custom_metadata() -> None:
 
     config = OneLoggerConfig(
         application_name="test_app",
-        perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_task",
         app_type_or_fn=ApplicationType.TRAINING,
         custom_metadata=custom_metadata,
@@ -85,7 +77,6 @@ def test_one_logger_config_model_validator_empty_application_name() -> None:
     with pytest.raises(ValidationError, match="application_name cannot be empty or whitespace-only"):
         OneLoggerConfig(
             application_name="",
-            perf_tag_or_fn="test_perf",
             session_tag_or_fn="test_task",
             app_type_or_fn=ApplicationType.TRAINING,
         )
@@ -96,7 +87,6 @@ def test_one_logger_config_model_validator_whitespace_only_application_name() ->
     with pytest.raises(ValidationError, match="application_name cannot be empty or whitespace-only"):
         OneLoggerConfig(
             application_name="   \t\n  ",
-            perf_tag_or_fn="test_perf",
             session_tag_or_fn="test_task",
             app_type_or_fn=ApplicationType.TRAINING,
         )
@@ -109,7 +99,6 @@ def test_one_logger_config_model_validator_empty_custom_metadata_key() -> None:
     with pytest.raises(ValidationError, match="custom_metadata keys must be non-empty strings"):
         OneLoggerConfig(
             application_name="test_app",
-            perf_tag_or_fn="test_perf",
             session_tag_or_fn="test_task",
             app_type_or_fn=ApplicationType.TRAINING,
             custom_metadata=custom_metadata,
@@ -123,7 +112,6 @@ def test_one_logger_config_model_validator_whitespace_only_custom_metadata_key()
     with pytest.raises(ValidationError, match="custom_metadata keys must be non-empty strings"):
         OneLoggerConfig(
             application_name="test_app",
-            perf_tag_or_fn="test_perf",
             session_tag_or_fn="test_task",
             app_type_or_fn=ApplicationType.TRAINING,
             custom_metadata=custom_metadata,
@@ -136,7 +124,6 @@ def test_one_logger_config_model_validator_valid_custom_metadata() -> None:
 
     config = OneLoggerConfig(
         application_name="test_app",
-        perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_task",
         app_type_or_fn=ApplicationType.TRAINING,
         custom_metadata=custom_metadata,
@@ -146,7 +133,6 @@ def test_one_logger_config_model_validator_valid_custom_metadata() -> None:
 
     config = OneLoggerConfig(
         application_name="test_app",
-        perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_task",
         app_type_or_fn=ApplicationType.TRAINING,
         custom_metadata=None,
@@ -156,7 +142,6 @@ def test_one_logger_config_model_validator_valid_custom_metadata() -> None:
 
     config = OneLoggerConfig(
         application_name="test_app",
-        perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_task",
         app_type_or_fn=ApplicationType.TRAINING,
         custom_metadata=custom_metadata,

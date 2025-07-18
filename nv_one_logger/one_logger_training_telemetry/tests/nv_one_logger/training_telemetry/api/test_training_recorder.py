@@ -12,18 +12,24 @@ from nv_one_logger.core.internal.multi_window_timer import MultiWindowTimer
 from nv_one_logger.core.span import Span, SpanName, StandardSpanName
 from nv_one_logger.core.time import TracingTimestamp
 from nv_one_logger.exporter.exporter import Exporter
-from nv_one_logger.recorder.default_recorder import ExportCustomizationMode
 
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_recorder import TrainingRecorder, _ProductivityState, _TrainingState
-from nv_one_logger.training_telemetry.api.training_telemetry_provider import DEFAULT_SPANS_EXPORT_BLACKLIST
+from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
+from .conftest import configure_provider_for_test
 from .utils import advance_time
 
 STARTING_PERF_COUNTER = 5000.0
 STARTING_TIME = 120000.0
+
+
+@pytest.fixture(autouse=True)
+def configure_provider(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
+    """Fixture that configures the TrainingTelemetryProvider."""
+    configure_provider_for_test(config, mock_exporter)
 
 
 @pytest.fixture(autouse=True)
@@ -43,13 +49,7 @@ def training_recorder(config: TrainingTelemetryConfig, mock_exporter: Exporter) 
     Returns:
         TrainingRecorder: A configured TrainingRecorder instance.
     """
-    recorder = TrainingRecorder(
-        config=config,
-        exporters=[mock_exporter],
-        export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS,
-        span_name_filter=DEFAULT_SPANS_EXPORT_BLACKLIST,
-    )
-    return recorder
+    return TrainingTelemetryProvider.instance().recorder
 
 
 def test_training_recorder_initialization(training_recorder: TrainingRecorder) -> None:
@@ -115,6 +115,10 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     train_iterations_start = 5
     train_samples_start = 3000
     training_recorder.on_training_loop_start(train_iterations_start=train_iterations_start, train_samples_start=train_samples_start)
+    assert config.training_loop_config is not None
+    world_size = config.training_loop_config.world_size
+    global_batch_size = config.training_loop_config.global_batch_size
+    flops_per_sample = config.training_loop_config.flops_per_sample
 
     expected_state = _TrainingState(
         multi_iteration_timers={
@@ -130,7 +134,7 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
         train_samples_processed_current_job=0,
         total_flops_current_job=0,
         train_tokens_current_job=None,
-        completed_floating_point_operations_overall=train_iterations_start * config.global_batch_size * config.flops_per_sample,
+        completed_floating_point_operations_overall=train_iterations_start * global_batch_size * flops_per_sample,
         training_loop_start_time=TracingTimestamp.now(),
         first_logged_train_iterations_finish_time=None,
         last_logged_train_iterations_finish_time=None,
@@ -182,7 +186,7 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     expected_state.train_samples_processed_current_job = 32  # batch size
     expected_state.first_logged_train_iterations_finish_time = latest_ts
     expected_state.last_logged_train_iterations_finish_time = latest_ts
-    expected_state.tflops_per_gpu.add_value(3200 / (10 * 10**12 * config.world_size))
+    expected_state.tflops_per_gpu.add_value(3200 / (10 * 10**12 * world_size))
     assert training_recorder._training_state == expected_state
 
     # ##########################################################
@@ -201,7 +205,7 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     expected_state.total_flops_current_job = 3200 * 2
     expected_state.train_samples_processed_current_job = 32 * 2
     expected_state.last_logged_train_iterations_finish_time = latest_ts
-    expected_state.tflops_per_gpu.add_value(3200 * 2 / ((10 + 20) * 10**12 * config.world_size))
+    expected_state.tflops_per_gpu.add_value(3200 * 2 / ((10 + 20) * 10**12 * world_size))
     assert training_recorder._training_state == expected_state
 
     # ##########################################################
@@ -271,7 +275,7 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     expected_state.total_flops_current_job = 3200 * 3
     expected_state.train_samples_processed_current_job = 32 * 3
     expected_state.last_logged_train_iterations_finish_time = latest_ts
-    expected_state.tflops_per_gpu.add_value(3200 * 3 / ((10 + 20 + 20) * 10**12 * config.world_size))
+    expected_state.tflops_per_gpu.add_value(3200 * 3 / ((10 + 20 + 20) * 10**12 * world_size))
     assert training_recorder._training_state == expected_state
 
     # ##########################################################
@@ -298,7 +302,7 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
             productive_train_samples=train_samples_start + 32 * 3,
             productive_train_iterations_sec=10 + 20 + 20,
             productive_validation_iterations_sec=20 + 50,
-            productive_train_tflops=(train_iterations_start + 3) * config.global_batch_size * config.flops_per_sample / 10**12,
+            productive_train_tflops=(train_iterations_start + 3) * global_batch_size * flops_per_sample / 10**12,
         )
     }
     assert training_recorder._training_state == expected_state
@@ -324,7 +328,8 @@ def test_events_for_typical_training_job(
     config: TrainingTelemetryConfig, training_recorder: TrainingRecorder, mock_perf_counter: Mock, mock_time: Mock
 ) -> None:
     """Tests that the correct metrics events are reported for a typical training job."""
-    assert config.log_every_n_train_iterations == 10
+    assert config.training_loop_config is not None
+    assert config.training_loop_config.log_every_n_train_iterations == 10
     num_train_iterations = 90
     checkpoint_interval = 3
     validation_interval = 5
@@ -457,4 +462,5 @@ def test_events_for_typical_training_job(
     for event_name, freq in expected_exported_event_names_freq.items():
         assert event_names.count(event_name) == freq
     # Nothing outside of the expected event names was exported
+    assert set(event_names) - set(expected_exported_event_names_freq.keys()) == set()
     assert set(event_names) - set(expected_exported_event_names_freq.keys()) == set()

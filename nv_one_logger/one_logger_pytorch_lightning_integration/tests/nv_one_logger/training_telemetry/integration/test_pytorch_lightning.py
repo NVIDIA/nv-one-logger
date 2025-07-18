@@ -13,7 +13,7 @@ from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.exporter.exporter import Exporter
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -84,21 +84,25 @@ def dummy_model() -> DummyModel:
 
 
 @pytest.fixture
-def config() -> TrainingTelemetryConfig:
+def config(request: pytest.FixtureRequest) -> TrainingTelemetryConfig:
     """Create a configuration for Training Telemetry."""
+    checkpoint_strategy: CheckPointStrategy = request.param
     config = TrainingTelemetryConfig(
-        world_size_or_fn=10,
         is_log_throughput_enabled_or_fn=True,
         is_save_checkpoint_enabled_or_fn=True,
-        train_iterations_target_or_fn=1000,
-        train_samples_target_or_fn=10000,
-        flops_per_sample_or_fn=100,
-        global_batch_size_or_fn=32,
-        log_every_n_train_iterations=10,
         application_name="test_app",
-        perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_session",
         enable_one_logger=True,
+        save_checkpoint_strategy=checkpoint_strategy,
+        training_loop_config=TrainingLoopConfig(
+            perf_tag_or_fn="test_perf",
+            log_every_n_train_iterations=10,
+            world_size_or_fn=10,
+            train_iterations_target_or_fn=1000,
+            train_samples_target_or_fn=10000,
+            flops_per_sample_or_fn=100,
+            global_batch_size_or_fn=32,
+        ),
     )
     return config
 
@@ -158,14 +162,13 @@ def checkpoints_dir() -> Generator[str, None, None]:
         shutil.rmtree(CHECKPOINTS_DIR)
 
 
-@pytest.mark.parametrize("checkpoint_strategy", [CheckPointStrategy.SYNC, CheckPointStrategy.ASYNC], ids=["sync", "async"])
+@pytest.mark.parametrize("config", [CheckPointStrategy.SYNC, CheckPointStrategy.ASYNC], indirect=True, ids=["sync", "async"])
 @pytest.mark.parametrize("use_hook_trainer_cls", [True, False], ids=["use_hook_trainer_cls", "use_one_logger_ptl_trainer"])
 def test_one_logger_ptl_trainer(
-    checkpoint_strategy: CheckPointStrategy,
+    config: TrainingTelemetryConfig,
     use_hook_trainer_cls: bool,
     dummy_model: DummyModel,
     dummy_data: tuple[DataLoader[tuple[torch.Tensor, torch.Tensor]], DataLoader[tuple[torch.Tensor, torch.Tensor]]],
-    config: TrainingTelemetryConfig,
     checkpoints_dir: str,
 ) -> None:
     """Tests PTL integration and verifies that supported telemetry callbacks are called implicitly.
@@ -179,7 +182,7 @@ def test_one_logger_ptl_trainer(
         config (TrainingTelemetryConfig): Configuration for training telemetry
         checkpoints_dir (str): Path to the checkpoints directory.
     """
-    TrainingTelemetryProvider.instance().config.save_checkpoint_strategy = checkpoint_strategy
+    checkpoint_strategy = config.save_checkpoint_strategy
     train_loader, val_loader = dummy_data
 
     # Create the model and trainer
@@ -270,6 +273,7 @@ def test_one_logger_ptl_trainer(
             Trainer.save_checkpoint = original_save_checkpoint
 
 
+@pytest.mark.parametrize("config", [CheckPointStrategy.SYNC], indirect=True, ids=["sync"])
 @pytest.mark.parametrize("use_hook_trainer_cls", [True, False], ids=["use_hook_trainer_cls", "use_one_logger_ptl_trainer"])
 def test_explicit_telemetry_callback_invocation(
     use_hook_trainer_cls: bool,

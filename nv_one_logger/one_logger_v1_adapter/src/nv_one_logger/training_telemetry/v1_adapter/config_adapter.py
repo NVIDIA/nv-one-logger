@@ -7,7 +7,7 @@ from nv_one_logger.api.config import ApplicationType, OneLoggerErrorHandlingStra
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.utils import evaluate_value
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
 from nv_one_logger.wandb.exporter.wandb_exporter import Config as WandBConfig
 
 
@@ -39,7 +39,6 @@ class ConfigAdapter:
 
         training_telemetry_config = TrainingTelemetryConfig(
             application_name=v1_config["one_logger_project"],
-            perf_tag_or_fn=v1_config["app_tag"],
             session_tag_or_fn=v1_config["app_tag_run_name"],
             app_type_or_fn=ApplicationType.TRAINING,
             is_baseline_run_or_fn=v1_config["is_baseline_run"],
@@ -50,22 +49,24 @@ class ConfigAdapter:
                 else OneLoggerErrorHandlingStrategy.PROPAGATE_EXCEPTIONS
             ),
             enable_one_logger=enable_for_current_rank,
-            world_size_or_fn=v1_config["world_size"],
-            global_batch_size_or_fn=v1_config["global_batch_size"],
             enable_for_current_rank=enable_for_current_rank,
-            log_every_n_train_iterations=v1_config.get("log_every_n_train_iterations", 50),
             is_train_iterations_enabled_or_fn=v1_config["is_train_iterations_enabled"],
             is_validation_iterations_enabled_or_fn=v1_config["is_validation_iterations_enabled"],
             is_test_iterations_enabled_or_fn=v1_config.get("is_test_iterations_enabled", True),
             is_save_checkpoint_enabled_or_fn=v1_config.get("is_save_checkpoint_enabled", True),
             is_log_throughput_enabled_or_fn=v1_config.get("is_log_throughput_enabled", False),
-            micro_batch_size_or_fn=v1_config.get("micro_batch_size", None),
-            flops_per_sample_or_fn=v1_config.get("flops_per_sample", None),
-            save_checkpoint_strategy=ConfigAdapter._convert_ckpt_strategy_to_enum(v1_config.get("save_checkpoint_strategy", "sync")),
-            train_iterations_target_or_fn=v1_config.get("train_iterations_target", None),
-            train_samples_target_or_fn=v1_config.get("train_samples_target", None),
+            training_loop_config=TrainingLoopConfig(
+                perf_tag_or_fn=v1_config["app_tag"],
+                world_size_or_fn=v1_config["world_size"],
+                global_batch_size_or_fn=v1_config["global_batch_size"],
+                log_every_n_train_iterations=v1_config.get("log_every_n_train_iterations", 50),
+                save_checkpoint_strategy=ConfigAdapter._convert_ckpt_strategy_to_enum(v1_config.get("save_checkpoint_strategy", "sync")),
+                micro_batch_size_or_fn=v1_config.get("micro_batch_size", None),
+                flops_per_sample_or_fn=v1_config.get("flops_per_sample", None),
+                train_iterations_target_or_fn=v1_config.get("train_iterations_target", None),
+                train_samples_target_or_fn=v1_config.get("train_samples_target", None),
+            ),
         )
-        training_telemetry_config.validate_config()
 
         wandb_config = WandBConfig(
             entity="hwinf_dcm",  # NOTE: should always be 'hwinf_dcm' for internal user.

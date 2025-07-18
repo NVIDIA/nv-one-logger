@@ -100,45 +100,6 @@ While we could have used Python classes defined in the OpenTelemetry API (such a
 
 This design decision means applications can use our core library without worrying about OpenTelemetry dependency conflicts, while still benefiting from OpenTelemetry-compatible instrumentation patterns. Users who would like to use OpenTelemetry collectors as their backend, can easily map the data to OpenTelemetry Python classes in the "backend" class.
 
-## Configuration
-
-One Logger is meant to add instrumentation to applications to track performance of the application. One of the important usages of One Logger is to identify significant performance changes that are not expected. That is, we run an application once and collect baseline performance data. Then, every time we run the application again, we can compare the performance data against the `baseline`. These comparisons are only useful if we can differentiate between cases that changes in the performance are expected and those that are not.
-
-Another use case is to measure the impact of a change in code, job configuration, or execution environment on the performance of an application.
-
-To be able to do the above easily, one logger supports tagging each run with some extra metadata to allow meaningful comparisons of runs. `perf_tag` and `session_tag` parameters are created for this reason. The user of the library can set the appropriate values as part of configuring one logger. Those values will be exported alongside the telemetry data to a telemetry backend. When interpretting, analyzing, or aggregating telemetry data, these tags provide extra context about the job to
-
-- flag anomalies in the performance (and unexpected performance degradation).
-- track progress of the application even if the progress is made by different jobs across different machines or clusters.
-- track the performance of the application over time and correlate performance changes with code changes.
-- and more.
-
-Below, we will explain the semantics of `perf_tag` and `session_tag` and the relationship between them. We expect the user to ensure these values are set correctly for each execution of their job.
-
-`perf_tag`: used to identify jobs whose performance is expected to be comparable. This means jobs with the same perf_tag must be performing similar tasks and are using the same code, config, and resources (or only differ in ways that are not expected to impact the performance).
-
-`session_tag`: used to identify jobs that together contribute to the same task. This means the jobs are "logically" part of a single larger job (e.g., a hypothetical long running job that is split into multiple jobs due to resource constraints or resuming after a failure).
-
-Let's use a few examples to illustrate the usage of these knobs. We use a model training application to illustrate the usage of these knobs but the same concepts apply to other application types.
-
-Imagine we have a model training application. A user downloads a snapshot of the code of this application (say a git branch at a certain commit) and runs the application on some hardware with some configuration (number of GPUs, batch size, etc). Let's assume the user needs to run 1000 iterations of training to complete the task (train a model with acceptable accuracy). Now let's go through a few scenarios:
-
-Scenario 1: User runs the job. It completes without a problem and fully trains the model. A week later, the user changes the model architecture significantly and then runs the job again. Due to the fundamental change in the job code, the two runs are not expected to have similar performance characteristics . In this case, the user should assign different values to "session_tag" across the two jobs because the two runs are independent from each other (they are independent training sessions each training the model from scratch to completion). Moreover, the user must assign different values to "perf_tag" because the two runs are not expected to have similar performance characteristics due to the changes in model code.
-
-Scenario 2: Simialr to scenario 1 except that for the second execution of the job, instead of changing the model architecture, the user allocates more resources to the job (the code remains the same). In this case, the user should assign different values to "session_tag" across the two jobs because the two runs are independent from each other (they are independent training sessions each training the model from scratch to completion). Moreover, the user must assign different values to "perf_tag" because the two runs are not expected to have similar performance characteristics due to the changes in resources.
-
-Scenario 3: The user runs the job to completion. The next day, there is an OS upgrade performed on the cluster to apply a security patch, which in theory should not impact the performance of the jobs on that cluster. The user runs the job again without changing the code or config. In this scenario: since the two runs are independently training the model from scratch to completion (in other words, are not part of the same training session), each run should get a different value for session_tag. However, since the two executions used the same code, config, and execution environment, they must have the same perf_tag.
-
-Scenario 4: The user runs the job but it fails due to an issue at iteration 100 (e.g., due a hardware issue, a scheduling constraint causing the job to be evicted, or a small bug in the model code). The user fixes the issues and runs the job again. In this scenario, the fix is not expected to significantly change the performance characteristics of the job. Since the user is using training chekcpoints, the second run will resume training from iteration 90 when the last checkpoint was saved. Once the second run completes, we have a fully trained model. In this scenario, the two runs are indeed logically part of the same task (same training session) and are expected to have the same performance characteristics as we didn't change the code, hardware, or configs in any way that we expect to impact the performance. So the two runs should have the same perf_tag and session_tag values.
-
-Scenario 5: The user runs the job but it fails at iteration 100 due to an issue in model code. To fix the issue, the user makes a change to the model code that, in addition to fixing the bug, significantly speeds up training (e.g, an unnecessary loop is removed). The user runs the job again and due to checkpointing, the second run starts from iteration 90 when the last checkpoint was saved. In this scenario, the two runs are indeed logically part of the same task (training the model from scratch to completion) but they are not expected to have the same performance characteristics due to the above-mentioned change in code. In this case, the two runs should have the same session_tag but different vaues for perf_tag.
-
-In summary, when configuring one logger for a particular application,
-
-- Change the value of `perf_tag`, whenever a change is made that is expected to change the performance charactristics of the application (changes in code, config/resources, or execution environment).
-
-- Use a unique value for `session_tag` for each single logical execution of your application (if a single logical execution is spread across multiple physical jobs due to interruptions in execution, all those jobs must have the same session_tag).
-
 ## Dealing with Telemetry Failures
 
 Like any other piece of software, the one logger library may encounter failures due to misconfiguration, incorrect usage, connection issues with the telemetry backends, or internal bugs in the library. For the rest of this section, we collectively refer to these issues as **telemetry errors**. The library provides several mechanisms to handle telemetry errors correctly:

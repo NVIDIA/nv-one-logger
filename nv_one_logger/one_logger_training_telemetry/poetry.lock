@@ -420,14 +420,14 @@ reference = "nv-shared-pypi"
 
 [[package]]
 name = "distlib"
-version = "0.3.9"
+version = "0.4.0"
 description = "Distribution utilities"
 optional = false
 python-versions = "*"
 groups = ["dev"]
 files = [
-    {file = "distlib-0.3.9-py2.py3-none-any.whl", hash = "sha256:47f8c22fd27c27e25a65601af709b38e4f0a45ea4fc2e710f65755fa8caaaf87"},
-    {file = "distlib-0.3.9.tar.gz", hash = "sha256:a60f20dea646b8a33f3e7772f74dc0b2d0772d2837ee1342a00645c81edf9403"},
+    {file = "distlib-0.4.0-py2.py3-none-any.whl", hash = "sha256:9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16"},
+    {file = "distlib-0.4.0.tar.gz", hash = "sha256:feec40075be03a04501a973d81f633735b4b69f98b05450592310c0f401a4e0d"},
 ]
 
 [package.source]
@@ -1000,14 +1000,14 @@ reference = "nv-shared-pypi"
 
 [[package]]
 name = "nv-one-logger-core"
-version = "2.0.0"
+version = "2.0.1"
 description = "Extensions to onelogger library to use Open telemetry (OTEL) as a backend."
 optional = false
 python-versions = ">=3.8,<4.0"
 groups = ["main"]
 files = [
-    {file = "nv_one_logger_core-2.0.0-py3-none-any.whl", hash = "sha256:24721638848c864b00e059557775dcb7f0d443c5b52ee4afaf6e0a9b4743d817"},
-    {file = "nv_one_logger_core-2.0.0.tar.gz", hash = "sha256:9364c9bb5f4a178b60f97f3730aeba43139928e9462737916a1fc0c8c4d5b15a"},
+    {file = "nv_one_logger_core-2.0.1-py3-none-any.whl", hash = "sha256:519824c74329866965cc09754f4e6d5055cf94485fe43ad8c99c7d58115ccdbe"},
+    {file = "nv_one_logger_core-2.0.1.tar.gz", hash = "sha256:750a44cfccdb5a453cd45f8afab957bb74f0b55dec97c27631fe008eec3109c3"},
 ]
 
 [package.dependencies]
@@ -1815,14 +1815,14 @@ reference = "nv-shared-pypi"
 
 [[package]]
 name = "virtualenv"
-version = "20.31.2"
+version = "20.32.0"
 description = "Virtual Python Environment builder"
 optional = false
 python-versions = ">=3.8"
 groups = ["dev"]
 files = [
-    {file = "virtualenv-20.31.2-py3-none-any.whl", hash = "sha256:36efd0d9650ee985f0cad72065001e66d49a6f24eb44d98980f630686243cf11"},
-    {file = "virtualenv-20.31.2.tar.gz", hash = "sha256:e10c0a9d02835e592521be48b332b6caee6887f332c111aa79a09b9e79efc2af"},
+    {file = "virtualenv-20.32.0-py3-none-any.whl", hash = "sha256:2c310aecb62e5aa1b06103ed7c2977b81e042695de2697d01017ff0f1034af56"},
+    {file = "virtualenv-20.32.0.tar.gz", hash = "sha256:886bf75cadfdc964674e6e33eb74d787dff31ca314ceace03ca5810620f4ecf0"},
 ]
 
 [package.dependencies]
@@ -1962,4 +1962,4 @@ reference = "nv-shared-pypi"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.8"
-content-hash = "e8cfad21501a331396848aeeac7338cb46068256436b69f3043280852c651e99"
+content-hash = "1217cf976d1598aea4faae5ccc07c65c340203124354f4af034e38dfccff2e53"

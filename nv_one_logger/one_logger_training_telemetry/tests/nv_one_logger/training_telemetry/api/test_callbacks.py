@@ -510,6 +510,7 @@ def test_save_async_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_cou
 
     global_step = 100
 
+    app_span = on_app_start()
     train_span = on_train_start(
         train_iterations_start=0,
         train_samples_start=0,
@@ -520,7 +521,7 @@ def test_save_async_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_cou
     on_save_checkpoint_start(global_step)
 
     # Verify span start
-    assert mock_exporter.export_start.call_count == 2
+    assert mock_exporter.export_start.call_count == 3
     span = span_from_export_start(mock_exporter, train_span)
     assert span.name == StandardTrainingJobSpanName.CHECKPOINT_SAVE_ASYNC
     assert span.attributes == CheckpointSaveSpanAttributes.create(CheckPointStrategy.ASYNC, global_step, 1)
@@ -534,13 +535,13 @@ def test_save_async_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_cou
     assert span.name == StandardTrainingJobSpanName.CHECKPOINT_SAVE_ASYNC
     assert span.updated_attributes == Attributes({StandardSpanAttributeName.DURATION_MSEC: 10000})
 
-    # For async checkpoints, the success event is fired after the checkpoint savespan ends and is
-    # a child of the training loop span.
+    # For async checkpoints, the success event is fired after the checkpoint save span ends and is
+    # a child of the application span.
     advance_time(mock_time, mock_perf_counter, 20.0)
     on_save_checkpoint_success(global_step)
-    events = get_non_trivial_events(train_span)
-    assert len(events) == 1
-    checkpoint_success_event = events[0]
+    events = get_non_trivial_events(app_span)
+    assert len(events) == 2
+    checkpoint_success_event = events[1]
     assert checkpoint_success_event.name == StandardTrainingJobEventName.SAVE_CHECKPOINT_SUCCESS
     expected_ev_attributes = SaveCheckpointSuccessEventAttributes.create(
         checkpoint_strategy=CheckPointStrategy.ASYNC,
@@ -561,19 +562,23 @@ def test_save_async_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_cou
     advance_time(mock_time, mock_perf_counter, 500.0)
     span = span_from_export_stop(mock_exporter)
     on_train_end()
-    assert mock_exporter.export_stop.call_count == 2
+    on_app_end()
+    assert mock_exporter.export_stop.call_count == 3
     span = span_from_export_stop(mock_exporter)
-    assert span == train_span
-
+    assert span == app_span
     assert_exporter_method_call_sequence(
         mock_exporter,
         [
             Exporter.initialize,
             Exporter.export_start,
+            Exporter.export_event,  # INITIALIZATION EVENT
+            Exporter.export_start,
             Exporter.export_start,
             Exporter.export_stop,
-            Exporter.export_event,
+            Exporter.export_event,  # SAVE_CHECKPOINT_SUCCESS EVENT
             Exporter.export_stop,
+            Exporter.export_stop,
+            Exporter.close,
         ],
     )
 

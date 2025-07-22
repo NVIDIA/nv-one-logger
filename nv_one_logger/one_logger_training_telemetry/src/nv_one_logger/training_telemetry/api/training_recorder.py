@@ -905,7 +905,7 @@ class TrainingRecorder(DefaultRecorder):
         if self._config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
             parent_span = self._get_active_span(StandardTrainingJobSpanName.CHECKPOINT_SAVE_SYNC)
         elif self._config.save_checkpoint_strategy == CheckPointStrategy.ASYNC:
-            parent_span = self._get_active_span(StandardTrainingJobSpanName.TRAINING_LOOP)
+            parent_span = self._get_active_span(StandardSpanName.APPLICATION)
         else:
             raise OneLoggerError(f"Invalid checkpoint strategy: {self._config.save_checkpoint_strategy}")
 

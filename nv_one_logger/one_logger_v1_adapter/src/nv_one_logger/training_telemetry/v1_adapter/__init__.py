@@ -24,20 +24,13 @@ def configure_v2_adapter(v1_config: Dict[str, Any]) -> None:
     training_telemetry_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
     exporters: List[Exporter] = []
-    if v1_config.get("one_logger_async", True):
-        exporters.append(
-            V1CompatibleWandbExporterAsync(
-                training_telemetry_config=training_telemetry_config,
-                wandb_config=wandb_config,
-            )
-        )
-    else:
-        exporters.append(
-            V1CompatibleWandbExporterSync(
-                training_telemetry_config=training_telemetry_config,
-                wandb_config=wandb_config,
-            )
-        )
+    # Use V1CompatibleExporter
+    v1_compatible_exporter = V1CompatibleExporter(
+        training_telemetry_config=training_telemetry_config,
+        async_mode=v1_config.get("one_logger_async", True),
+    )
+    exporters.append(v1_compatible_exporter.exporter)
+
     # Configure the TrainingTelemetryProvider using the fluent API
     train_telemetry_provider_instance = TrainingTelemetryProvider.instance()
 

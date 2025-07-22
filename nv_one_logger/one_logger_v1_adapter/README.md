@@ -41,6 +41,44 @@ exporter = V1CompatibleExporter(
 TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter.exporter).configure_provider()
 ```
 
+### Using configure_v2_adapter (Recommended)
+
+For easier v1 to v2 migration, you can use the `configure_v2_adapter` function which handles all the configuration automatically:
+
+```python
+from nv_one_logger.training_telemetry.v1_adapter import configure_v2_adapter
+
+# Define your v1-style configuration
+v1_config = {
+    "one_logger_project": "my_app",
+    "app_tag": "my_perf_tag", 
+    "app_tag_run_name": "my_session",
+    "is_baseline_run": False,
+    "world_size": 1,
+    "global_batch_size": 32,
+    "is_train_iterations_enabled": True,
+    "is_validation_iterations_enabled": True,
+    "one_logger_async": True,  # Use async mode
+    "enable_for_current_rank": True,  # Enable for current rank
+    "metadata": {
+        "model_name": "gpt2",
+        "dataset": "wikitext"
+    }
+}
+
+# Configure OneLogger with v1 config - this handles everything automatically
+configure_v2_adapter(v1_config)
+```
+
+The `configure_v2_adapter` function:
+- Converts v1 config to v2 config using `ConfigAdapter`
+- Creates a `V1CompatibleExporter` with proper tags
+- Configures the `TrainingTelemetryProvider` singleton
+- Handles async/sync mode based on `one_logger_async`
+- Applies rank-based configuration via `enable_for_current_rank`
+
+This is the recommended approach for applications migrating from v1 to v2 as it requires minimal code changes.
+
 ### Configuration
 
 The `V1CompatibleExporter` automatically creates a `WandBConfig` with v1-compatible settings:

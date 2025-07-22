@@ -54,7 +54,7 @@ from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEvent
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
-from .conftest import configure_provider_for_test
+from .conftest import configure_provider_for_test, reconfigure_provider
 from .utils import (
     advance_time,
     all_events_from_export_event,
@@ -126,14 +126,10 @@ def test_app_lifecycle_callbacks(
     assert event.name == StandardTrainingJobEventName.ONE_LOGGER_INITIALIZATION
     expected_attributes: Dict[str, AttributeValue] = {
         StandardEventAttributeName.TIMESTAMP_MSEC: start_time_msec if start_time_msec is not None else STARTING_TIME * 1000,
-        "one_logger_training_telemetry_version": "2.0.0",
+        "one_logger_training_telemetry_version": "2.0.1",
         "enable_for_current_rank": True,
-        "perf_tag": "test_perf",
         "session_tag": "test_session",
         "app_type": ApplicationType.TRAINING,
-        "log_every_n_train_iterations": 10,
-        "world_size": 10,
-        "global_batch_size": 32,
         "is_baseline_run": False,
         "is_train_iterations_enabled": True,
         "is_validation_iterations_enabled": True,
@@ -367,6 +363,7 @@ def test_validation_callbacks_in_isolation(mock_exporter: MagicMock, mock_perf_c
 def test_validation_callbacks_within_training_loop(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig) -> None:
     """Tests that the validation attributes are updated correctly within the training loop."""
     config.is_log_throughput_enabled_or_fn = False
+    reconfigure_provider(config, mock_exporter)
 
     on_train_start(train_iterations_start=0)
     for _ in range(30):
@@ -418,6 +415,8 @@ def test_validation_callbacks_within_training_loop(mock_exporter: MagicMock, moc
 def test_save_sync_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig) -> None:
     """Test that save sync checkpoint callbacks create and stop the appropriate spans and events."""
     config.save_checkpoint_strategy = CheckPointStrategy.SYNC
+    reconfigure_provider(config, mock_exporter)
+
     global_step = 100
     train_span = on_train_start(
         train_iterations_start=0,
@@ -506,7 +505,9 @@ def test_save_sync_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_coun
 
 def test_save_async_checkpoint_callbacks(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig) -> None:
     """Test that save sync checkpoint callbacks create and stop the appropriate spans and events."""
-    TrainingTelemetryProvider.instance().config.save_checkpoint_strategy = CheckPointStrategy.ASYNC
+    config.save_checkpoint_strategy = CheckPointStrategy.ASYNC
+    reconfigure_provider(config, mock_exporter)
+
     global_step = 100
 
     train_span = on_train_start(
@@ -585,14 +586,18 @@ def _dummy_train_samples_target_fn() -> int:
     return 32000  # 32 samples per iteration * 1000 iterations
 
 
-def test_training_start_end_without_single_iteration_callbacks(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock) -> None:
+def test_training_start_end_without_single_iteration_callbacks(
+    mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig
+) -> None:
     """Test that training start/end callbacks create and stop the appropriate spans when we don't get callbacks for individual iterations."""
     # global step starts from 0. So this means that 10 iterations have been completed in a previous run.
     # So the first iteration of the current run is iteration # 10.
     train_iterations_start = 10
     train_samples_start = 0
 
-    TrainingTelemetryProvider.instance().config.seq_length_or_fn = 1024
+    assert config.training_loop_config is not None
+    config.training_loop_config.seq_length_or_fn = 1024
+    reconfigure_provider(config, mock_exporter)
 
     on_train_start(
         train_iterations_start=train_iterations_start,
@@ -606,6 +611,10 @@ def test_training_start_end_without_single_iteration_callbacks(mock_exporter: Ma
     span = span_from_export_start(mock_exporter, None)
     assert span.name == StandardTrainingJobSpanName.TRAINING_LOOP
     assert span.attributes == TrainingLoopAttributes.create(
+        perf_tag="test_perf",
+        log_every_n_train_iterations=10,
+        world_size=10,
+        global_batch_size=32,
         train_iterations_start=train_iterations_start,
         train_samples_start=train_samples_start,
         train_iterations_target=1000,
@@ -614,6 +623,7 @@ def test_training_start_end_without_single_iteration_callbacks(mock_exporter: Ma
         completed_floating_point_operations_overall=train_iterations_start
         * 32
         * 100,  # 10 iterations in the loaded checkpoint * 32 samples per iteration * 100 flops per sample
+        seq_length=1024,
     )
 
     advance_time(mock_time, mock_perf_counter, 10.0)
@@ -640,12 +650,13 @@ def test_training_start_end_with_single_iteration_callbacks(
     mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig
 ) -> None:
     """Test that training start/end callbacks create and stop the appropriate spans when we get callbacks for individual iterations."""
-    config = TrainingTelemetryProvider.instance().config
-    config.log_every_n_train_iterations = 8
-    config.flops_per_sample_or_fn = 100
-    config.global_batch_size_or_fn = 32
-    config.world_size_or_fn = 10
-    config.seq_length_or_fn = 1024
+    assert config.training_loop_config is not None
+    config.training_loop_config.log_every_n_train_iterations = 8
+    config.training_loop_config.flops_per_sample_or_fn = 100
+    config.training_loop_config.global_batch_size_or_fn = 32
+    config.training_loop_config.world_size_or_fn = 10
+    config.training_loop_config.seq_length_or_fn = 1024
+    reconfigure_provider(config, mock_exporter)
 
     expected_first_logged_train_iterations_finish_timestamp_sec = 0
 
@@ -674,6 +685,10 @@ def test_training_start_end_with_single_iteration_callbacks(
     span = span_from_export_start(mock_exporter, None)
     assert span.name == StandardTrainingJobSpanName.TRAINING_LOOP
     assert span.attributes == TrainingLoopAttributes.create(
+        perf_tag="test_perf",
+        log_every_n_train_iterations=8,
+        world_size=10,
+        global_batch_size=32,
         train_iterations_start=train_iterations_start,
         train_samples_start=train_samples_start,
         train_iterations_target=1000,
@@ -682,6 +697,7 @@ def test_training_start_end_with_single_iteration_callbacks(
         completed_floating_point_operations_overall=train_iterations_start
         * 32
         * 100,  # 10 iterations in the loaded checkpoint * 32 samples per iteration * 100 flops per sample
+        seq_length=1024,
     )
 
     on_train_end()

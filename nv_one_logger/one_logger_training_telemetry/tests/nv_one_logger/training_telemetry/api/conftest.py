@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-from typing import Generator
+from typing import Generator, cast
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from nv_one_logger.exporter.exporter import Exporter
 
-from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
 from .utils import reset_singletong_providers_for_test
@@ -18,6 +18,12 @@ def configure_provider_for_test(config: TrainingTelemetryConfig, mock_exporter: 
     # function for those tests interferes with testing the Recorder in isolation.
     reset_singletong_providers_for_test()
     (TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider())
+
+
+def reconfigure_provider(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
+    """Use this function when you want to reconfigure the provider after it is already initialized."""
+    cast(MagicMock, mock_exporter).reset_mock()
+    configure_provider_for_test(config, mock_exporter)
 
 
 @pytest.fixture
@@ -40,18 +46,20 @@ def mock_perf_counter() -> Generator[Mock, None, None]:
 def config() -> TrainingTelemetryConfig:
     """Create a configuration for Training Telemetry."""
     config = TrainingTelemetryConfig(
-        world_size_or_fn=10,
-        is_log_throughput_enabled_or_fn=True,
-        flops_per_sample_or_fn=100,
-        global_batch_size_or_fn=32,
-        log_every_n_train_iterations=10,
         application_name="test_app",
-        perf_tag_or_fn="test_perf",
         session_tag_or_fn="test_session",
         enable_one_logger=True,
         enable_for_current_rank=True,
-        train_iterations_target_or_fn=100,
-        train_samples_target_or_fn=3200,
+        is_log_throughput_enabled_or_fn=True,
+        training_loop_config=TrainingLoopConfig(
+            perf_tag_or_fn="test_perf",
+            world_size_or_fn=10,
+            flops_per_sample_or_fn=100,
+            global_batch_size_or_fn=32,
+            log_every_n_train_iterations=10,
+            train_iterations_target_or_fn=100,
+            train_samples_target_or_fn=3200,
+        ),
     )
     return config
 

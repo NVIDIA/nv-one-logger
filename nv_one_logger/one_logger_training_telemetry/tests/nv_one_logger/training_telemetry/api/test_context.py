@@ -96,7 +96,10 @@ def test_application_context(mock_exporter: MagicMock, mock_perf_counter: Mock, 
 
 def test_training_context(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig) -> None:
     """Test that the training context manager creates and stops the appropriate spans."""
-    with training_loop(train_iterations_start=0, train_iterations_target_or_fn=1000, train_samples_target_or_fn=1000 * config.global_batch_size) as span:
+    assert config.training_loop_config
+    with training_loop(
+        train_iterations_start=0, train_iterations_target_or_fn=1000, train_samples_target_or_fn=1000 * config.training_loop_config.global_batch_size
+    ) as span:
         advance_time(mock_time, mock_perf_counter, 700.0)
 
     assert mock_exporter.export_start.call_count == 1
@@ -104,11 +107,15 @@ def test_training_context(mock_exporter: MagicMock, mock_perf_counter: Mock, moc
     span = span_from_export_start(mock_exporter, expected_parent=None)
     assert span.name == StandardTrainingJobSpanName.TRAINING_LOOP
     expected_attributes: Dict[str, AttributeValue] = {
+        "perf_tag": "test_perf",
+        "log_every_n_train_iterations": 10,
+        "world_size": 10,
+        "global_batch_size": 32,
         "completed_floating_point_operations_overall": 0,
         "train_iterations_start": 0,
         "train_iterations_target": 1000,
         "train_samples_start": 0,
-        "train_samples_target": 32000,  # train_iterations_target * config.global_batch_size
+        "train_samples_target": 32000,  # train_iterations_target * global_batch_size
         StandardSpanAttributeName.DURATION_MSEC: 700000,
     }
     assert span.attributes == Attributes(expected_attributes)
@@ -447,7 +454,9 @@ def test_disabled_for_current_rank(config: TrainingTelemetryConfig, mock_exporte
         with checkpoint_save(100) as checkpoint_save_span:
             assert checkpoint_save_span is None
         with training_loop(
-            train_iterations_start=0, train_iterations_target_or_fn=1000, train_samples_target_or_fn=1000 * config.global_batch_size
+            train_iterations_start=0,
+            train_iterations_target_or_fn=1000,
+            train_samples_target_or_fn=32000,
         ) as training_loop_span:
             assert training_loop_span is None
             with training_iteration() as training_iteration_span:

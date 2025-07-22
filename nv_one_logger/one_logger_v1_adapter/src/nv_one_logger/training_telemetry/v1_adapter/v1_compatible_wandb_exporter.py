@@ -152,6 +152,7 @@ class V1CompatibleWandbExporterAdapter:
         attributes = cast(OneLoggerInitializationAttributes, event.attributes)
         metrics_to_log: dict[str, Any] = _build_metrics(
             [
+                _MetricMapping("app_tag_run_name", attributes.session_tag),
                 _MetricMapping("summary_data_schema_version", attributes.summary_data_schema_version),
                 _MetricMapping("app_run_type", attributes.app_type),
                 _MetricMapping("app_metrics_feature_tags", "full"),
@@ -161,15 +162,9 @@ class V1CompatibleWandbExporterAdapter:
                 _MetricMapping("is_test_iterations_enabled", attributes.is_test_iterations_enabled),
                 _MetricMapping("is_save_checkpoint_enabled", attributes.is_save_checkpoint_enabled),
                 _MetricMapping("is_log_throughput_enabled", attributes.is_log_throughput_enabled),
-                _MetricMapping("world_size", attributes.world_size),
-                _MetricMapping("global_batch_size", attributes.global_batch_size),
-                _MetricMapping("app_tag_run_name", attributes.session_tag),
-                _MetricMapping("micro_batch_size", attributes.micro_batch_size),
-                _MetricMapping("model_seq_length", attributes.seq_length),
                 _MetricMapping("save_checkpoint_strategy", attributes.checkpoint_strategy if attributes.is_save_checkpoint_enabled else None),
             ]
         )
-        metrics_to_log.update(self._perf_tag_dict(self._training_telemetry_config))
 
         # We deprecated "app_tag_run_version" for v2, but during the transition, we pass the "app_tag_run_version"
         # value provided by v1 users as custom metadata. See ConfigAdapter.convert_to_v2_config for more details.
@@ -183,12 +178,17 @@ class V1CompatibleWandbExporterAdapter:
         return metrics_to_log
 
     def _perf_tag_dict(self, config: TrainingTelemetryConfig) -> dict[str, Any]:
+        assert_that(
+            config.training_loop_config is not None,
+            "Expected training_loop_config to be non-None",
+        )
+        perf_tag = config.training_loop_config.perf_tag  # type: ignore[report-optional-member-access]
         perf_tag_list: list[str] = []
-        if type(config.perf_tag) is list:
-            perf_tag_list = config.perf_tag
+        if type(perf_tag) is list:
+            perf_tag_list = perf_tag
 
         else:
-            perf_tag_list = [config.perf_tag]
+            perf_tag_list = [perf_tag]
 
         perf_tag_id_list = [hashlib.md5(pt.encode("utf-8")).hexdigest() for pt in perf_tag_list]
         return {
@@ -269,8 +269,10 @@ class V1CompatibleWandbExporterAdapter:
             f"Expected span attributes to be of type TrainingLoopAttributes but got {type(span.attributes)}",
         )
         attributes = cast(TrainingLoopAttributes, span.attributes)
-        return _build_metrics(
+        metrics_to_log = _build_metrics(
             [
+                _MetricMapping("world_size", attributes.world_size),
+                _MetricMapping("global_batch_size", attributes.global_batch_size),
                 _MetricMapping("app_train_loop_start_time", span.start_event.timestamp.milliseconds_since_epoch),
                 _MetricMapping("train_tokens_target", attributes.train_tokens_target),
                 _MetricMapping("train_iterations_target", attributes.train_iterations_target),
@@ -280,8 +282,12 @@ class V1CompatibleWandbExporterAdapter:
                 _MetricMapping("train_samples_start", attributes.train_samples_start),
                 _MetricMapping("train_samples_end", attributes.train_samples_start),
                 _MetricMapping("train_tflop_start", attributes.completed_floating_point_operations_overall, coefficient=1.0 / (10**12)),
+                _MetricMapping("micro_batch_size", attributes.micro_batch_size),
+                _MetricMapping("model_seq_length", attributes.seq_length),
             ]
         )
+        metrics_to_log.update(self._perf_tag_dict(self._training_telemetry_config))
+        return metrics_to_log
 
     def _metrics_for_training_loop_stop(self, span: Span) -> dict[str, Any]:
         assert_that(
@@ -379,7 +385,8 @@ class V1CompatibleWandbExporterAdapter:
                 _MetricMapping("validation_iterations_time_total_productive", attributes.productive_validation_iterations_sec),
             ]
         )
-        if self._training_telemetry_config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
+        save_checkpoint_strategy = self._training_telemetry_config.save_checkpoint_strategy  # type: ignore[report-optional-member-access]
+        if save_checkpoint_strategy == CheckPointStrategy.SYNC:
             # In v1, we only report the first/last save times for sync checkpoints.
             metrics_to_log.update(
                 _build_metrics(
@@ -394,7 +401,7 @@ class V1CompatibleWandbExporterAdapter:
                     ]
                 )
             )
-        elif self._training_telemetry_config.save_checkpoint_strategy == CheckPointStrategy.ASYNC:
+        elif save_checkpoint_strategy == CheckPointStrategy.ASYNC:
             metrics_to_log.update(
                 _build_metrics(
                     [

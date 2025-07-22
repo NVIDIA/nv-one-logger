@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nv-one-logger-training-telemetry"
-version = "2.0.0"
+version = "2.0.1"
 description = "Training job telemetry using OneLogger library."
 authors = ["HWInf-MLWFO <HWInf-MLWFO-E2E-Dev@exchange.nvidia.com>"]
 readme = "README.md"
@@ -12,7 +12,7 @@ packages = [
 python = "^3.8"
 StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python requirement to >= 3.11
 typing-extensions = "^4.13.2"
-nv-one-logger-core = {version = "^2.0.0", source = "mlwfo-staging-pypi"}
+nv-one-logger-core = {version = "^2.0.1", source = "mlwfo-staging-pypi"}
 
 [build-system]
 requires = ["poetry-core>=1.9.1,<2.0.0", "python-semantic-release>=9.8.3,<10.0"]

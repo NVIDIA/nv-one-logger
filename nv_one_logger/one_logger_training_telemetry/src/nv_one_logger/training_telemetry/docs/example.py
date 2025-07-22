@@ -17,7 +17,8 @@ from nv_one_logger.core.attributes import Attributes
 from nv_one_logger.exporter.file_exporter import FileExporter
 from torch.utils.data import DataLoader, TensorDataset
 
-from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
+from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.context import application, checkpoint_save, training_iteration, training_loop
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
@@ -33,16 +34,21 @@ num_epochs = 10
 
 # Initialize the telemetry provider with a default configuration
 config = TrainingTelemetryConfig(
-    world_size_or_fn=5,
-    is_log_throughput_enabled_or_fn=True,
-    flops_per_sample_or_fn=100,
-    global_batch_size_or_fn=32,
-    log_every_n_train_iterations=10,
     application_name="test_app",
-    perf_tag_or_fn="test_perf",
     session_tag_or_fn="test_session",
+    is_log_throughput_enabled_or_fn=True,
+    save_checkpoint_strategy=CheckPointStrategy.SYNC,
+    training_loop_config=TrainingLoopConfig(
+        perf_tag_or_fn="test_perf",
+        log_every_n_train_iterations=10,
+        world_size_or_fn=5,
+        flops_per_sample_or_fn=100,
+        global_batch_size_or_fn=32,
+    ),
 )
-TrainingTelemetryProvider.instance().configure(config=config, exporters=[FileExporter(file_path=Path("training_telemetry.json"))])
+TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(
+    FileExporter(file_path=Path("training_telemetry.json"))
+).configure_provider()
 
 
 class SimpleModel(nn.Module):

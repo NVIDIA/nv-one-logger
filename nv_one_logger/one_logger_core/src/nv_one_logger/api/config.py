@@ -3,10 +3,11 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, List, Literal, Optional, Union
+from typing import Callable, Dict, Literal, Optional, Union
 
 from pydantic import BaseModel, model_validator
 from strenum import StrEnum
+from typing_extensions import Self
 
 from nv_one_logger.core.attributes import AttributeValue
 from nv_one_logger.core.internal.utils import evaluate_value
@@ -78,7 +79,7 @@ class LoggerConfig(BaseModel):
     log_file_path_for_err: Union[Path, str] = "onelogger.err"
 
     @model_validator(mode="after")
-    def validate_config(self):
+    def validate_config(self) -> Self:
         """Validate the logger config."""
         if self.log_level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
             raise ValueError(f"log_level must be one of {'DEBUG', 'INFO', 'WARNING', 'ERROR'}, got {self.log_level}")
@@ -93,23 +94,9 @@ class OneLoggerConfig(BaseModel):
     # different versions of the application).
     application_name: str
 
-    # perf_tag or function to compute the perf tag. perf_tag is used to identify jobs whose performance is expected to be comparable.
-    # Since this is a complex concept and is related to "session_tag", we strongly recommend that you read the "configuration"
-    # section of README for more details.
-    perf_tag_or_fn: Union[str, List[str], Callable[[], Union[str, List[str]]]]
-
-    @property
-    def perf_tag(self) -> Union[str, List[str]]:
-        """Get the perf tag.
-
-        Returns:
-            Union[str, List[str]]: The evaluated perf tag value.
-        """
-        return evaluate_value(self.perf_tag_or_fn)  # type: ignore[return-value]
-
-    # session_tag (or callable to generate the tag). session_tag is used to determine if two runs use the same code, config, and execution environment
-    # (or the differences are not expected to impact the performance). Since this is a complex concept and is related to
-    # "perf_tag", we strongly recommend that you read the "configuration" section of README for more details.
+    # session_tag (or callable to generate the tag). session_tag is used to used to identify jobs that together contribute
+    # to the same task. This means the jobs are "logically" part of a single larger job (e.g.,
+    # a long running job that is split into multiple jobs due to resource constraints or resuming after a failure).
     session_tag_or_fn: Union[str, Callable[[], str]]
 
     @property
@@ -135,8 +122,7 @@ class OneLoggerConfig(BaseModel):
         return evaluate_value(self.app_type_or_fn)
 
     # Flag (or callable to return flag) that indicates if this is a baseline run for comparison purposes.
-    # A baseline run is a run that is used to set a performance baseline for future runs with the same
-    # perf_tag.
+    # A baseline run is a run that is used to set a performance baseline for future runs.
     is_baseline_run_or_fn: Union[bool, Callable[[], bool]] = False
 
     @property
@@ -168,7 +154,7 @@ class OneLoggerConfig(BaseModel):
     logger_config: LoggerConfig = LoggerConfig()
 
     @model_validator(mode="after")
-    def validate_config(self):
+    def validate_config(self) -> Self:
         """Validate the OneLogger configuration.
 
         This validator ensures that:

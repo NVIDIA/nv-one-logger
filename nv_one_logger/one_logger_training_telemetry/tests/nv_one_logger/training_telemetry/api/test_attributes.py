@@ -23,9 +23,17 @@ class TestTrainingLoopAttributes:
     def test_create_with_required_parameters(self) -> None:
         """Test creating TrainingLoopAttributes with only required parameters."""
         attrs = TrainingLoopAttributes.create(
+            perf_tag="test_perf",
+            log_every_n_train_iterations=10,
+            world_size=10,
+            global_batch_size=32,
             train_iterations_start=100,
             train_samples_start=1000,
         )
+        assert attrs.perf_tag == "test_perf"
+        assert attrs.log_every_n_train_iterations == 10
+        assert attrs.world_size == 10
+        assert attrs.global_batch_size == 32
         assert attrs.train_iterations_start == 100
         assert attrs.train_samples_start == 1000
         assert attrs.train_iterations_target is None
@@ -35,23 +43,37 @@ class TestTrainingLoopAttributes:
     def test_create_with_all_parameters(self) -> None:
         """Test creating TrainingLoopAttributes with all parameters."""
         attrs = TrainingLoopAttributes.create(
+            perf_tag="test_perf",
+            log_every_n_train_iterations=10,
+            world_size=10,
+            global_batch_size=32,
             train_iterations_start=100,
             train_samples_start=1000,
             train_iterations_target=1000,
             train_samples_target=10000,
             train_tokens_target=50000,
+            micro_batch_size=1,
+            seq_length=1024,
+            completed_floating_point_operations_overall=1000000,
         )
         assert attrs.train_iterations_start == 100
         assert attrs.train_samples_start == 1000
         assert attrs.train_iterations_target == 1000
         assert attrs.train_samples_target == 10000
         assert attrs.train_tokens_target == 50000
+        assert attrs.micro_batch_size == 1
+        assert attrs.seq_length == 1024
+        assert attrs.completed_floating_point_operations_overall == 1000000
 
     def test_pass_none_for_required_parameter(self) -> None:
         """Test that passing None for a required parameter raises an error."""
-        with pytest.raises(OneLoggerError, match="train_iterations_start is required"):
+        with pytest.raises(OneLoggerError, match="perf_tag is required"):
             TrainingLoopAttributes.create(
-                train_iterations_start=None,  # type: ignore
+                perf_tag=None,  # type: ignore
+                log_every_n_train_iterations=10,
+                world_size=10,
+                global_batch_size=32,
+                train_iterations_start=100,
                 train_samples_start=1000,
             )
 
@@ -127,12 +149,8 @@ class TestOneLoggerInitializationAttributes:
         attrs = OneLoggerInitializationAttributes.create(
             one_logger_training_telemetry_version="1.0.0",
             enable_for_current_rank=True,
-            perf_tag="test_tag",
             session_tag="test_session",
             app_type="training",
-            log_every_n_train_iterations=100,
-            world_size=1,
-            global_batch_size=32,
             is_baseline_run=False,
             is_train_iterations_enabled=True,
             is_validation_iterations_enabled=True,
@@ -146,12 +164,8 @@ class TestOneLoggerInitializationAttributes:
         )
         assert attrs.one_logger_training_telemetry_version == "1.0.0"
         assert attrs.enable_for_current_rank is True
-        assert attrs.perf_tag == "test_tag"
         assert attrs.session_tag == "test_session"
         assert attrs.app_type == "training"
-        assert attrs.log_every_n_train_iterations == 100
-        assert attrs.world_size == 1
-        assert attrs.global_batch_size == 32
         assert attrs.is_baseline_run is False
         assert attrs.is_train_iterations_enabled is True
         assert attrs.is_validation_iterations_enabled is True
@@ -162,8 +176,6 @@ class TestOneLoggerInitializationAttributes:
         assert attrs.node_name == "test_node"
         assert attrs.rank == 0
         assert attrs.checkpoint_strategy == CheckPointStrategy.SYNC
-        assert attrs.micro_batch_size is None
-        assert attrs.seq_length is None
         assert attrs.custom_metadata is None
 
     def test_create_with_optional_parameters(self) -> None:
@@ -171,12 +183,8 @@ class TestOneLoggerInitializationAttributes:
         attrs = OneLoggerInitializationAttributes.create(
             one_logger_training_telemetry_version="1.0.0",
             enable_for_current_rank=True,
-            perf_tag="test_tag",
             session_tag="test_session",
             app_type="training",
-            log_every_n_train_iterations=100,
-            world_size=1,
-            global_batch_size=32,
             is_baseline_run=False,
             is_train_iterations_enabled=True,
             is_validation_iterations_enabled=True,
@@ -187,25 +195,16 @@ class TestOneLoggerInitializationAttributes:
             node_name="test_node",
             rank=0,
             checkpoint_strategy=CheckPointStrategy.SYNC,
-            micro_batch_size=16,
-            seq_length=512,
             custom_metadata={"key1": "value1", "key2": "value2"},
         )
-        assert attrs.micro_batch_size == 16
-        assert attrs.seq_length == 512
         assert attrs.custom_metadata == ["key1:value1", "key2:value2"]
 
     def test_pass_none_for_required_parameters(self) -> None:
         """Test that passing None for any required parameter raises an error."""
         required_params = {
-            "one_logger_training_telemetry_version": "one_logger_training_telemetry_version is required",
             "enable_for_current_rank": "enable_for_current_rank is required",
-            "perf_tag": "perf_tag is required",
             "session_tag": "session_tag is required",
             "app_type": "app_type is required",
-            "log_every_n_train_iterations": "log_every_n_train_iterations is required",
-            "world_size": "world_size is required",
-            "global_batch_size": "global_batch_size is required",
             "is_baseline_run": "is_baseline_run is required",
             "is_train_iterations_enabled": "is_train_iterations_enabled is required",
             "is_validation_iterations_enabled": "is_validation_iterations_enabled is required",
@@ -221,12 +220,8 @@ class TestOneLoggerInitializationAttributes:
         base_params = {
             "one_logger_training_telemetry_version": "1.0.0",
             "enable_for_current_rank": True,
-            "perf_tag": "test_tag",
             "session_tag": "test_session",
             "app_type": "training",
-            "log_every_n_train_iterations": 100,
-            "world_size": 1,
-            "global_batch_size": 32,
             "is_baseline_run": False,
             "is_train_iterations_enabled": True,
             "is_validation_iterations_enabled": True,

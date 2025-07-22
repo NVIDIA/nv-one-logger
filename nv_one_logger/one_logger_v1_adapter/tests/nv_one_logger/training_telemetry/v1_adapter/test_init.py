@@ -188,11 +188,12 @@ class TestConfigureV2Adapter:
 
         # Check that the conversion preserved key values
         assert training_config.application_name == "real_test_project"
-        assert training_config.perf_tag_or_fn == "real_test_tag"
-        assert training_config.session_tag_or_fn == "real_test_run"
-        assert training_config.world_size_or_fn == 4
-        assert training_config.global_batch_size_or_fn == 64
-        assert training_config.is_baseline_run_or_fn is False
+        assert training_config.session_tag == "real_test_run"
+        assert training_config.training_loop_config is not None
+        assert training_config.training_loop_config.perf_tag == "real_test_tag"
+        assert training_config.training_loop_config.world_size == 4
+        assert training_config.training_loop_config.global_batch_size == 64
+        assert training_config.is_baseline_run is False
 
     def test_configure_v2_adapter_integration_with_real_configs(self):
         """Integration test using real ConfigAdapter with minimal mocking."""
@@ -227,13 +228,14 @@ class TestConfigureV2Adapter:
             wandb_config = call_args["wandb_config"]
 
             assert training_config.application_name == "integration_test"
-            assert training_config.perf_tag_or_fn == "integration_tag"
-            assert training_config.session_tag_or_fn == "integration_run"
-            assert training_config.is_baseline_run_or_fn is True
-            assert training_config.world_size_or_fn == 2
-            assert training_config.global_batch_size_or_fn == 32
-            assert training_config.is_train_iterations_enabled_or_fn is True
-            assert training_config.is_validation_iterations_enabled_or_fn is False
+            assert training_config.session_tag == "integration_run"
+            assert training_config.is_baseline_run is True
+            assert training_config.is_train_iterations_enabled is True
+            assert training_config.is_validation_iterations_enabled is False
+            assert training_config.training_loop_config is not None
+            assert training_config.training_loop_config.perf_tag == "integration_tag"
+            assert training_config.training_loop_config.world_size == 2
+            assert training_config.training_loop_config.global_batch_size == 32
             assert wandb_config is not None
 
             # Verify real provider was configured
@@ -545,14 +547,15 @@ class TestConfigureV2Adapter:
             training_config = call_args["training_telemetry_config"]
 
             # Verify additional fields were processed correctly by real ConfigAdapter
-            assert training_config.log_every_n_train_iterations == 100
-            assert training_config.is_test_iterations_enabled_or_fn is False
-            assert training_config.is_save_checkpoint_enabled_or_fn is True
-            assert training_config.is_log_throughput_enabled_or_fn is True
-            assert training_config.micro_batch_size_or_fn == 8
-            assert training_config.flops_per_sample_or_fn == 1000
-            assert training_config.train_iterations_target_or_fn == 10000
-            assert training_config.train_samples_target_or_fn == 100000
+            assert training_config.is_test_iterations_enabled is False
+            assert training_config.is_save_checkpoint_enabled is True
+            assert training_config.is_log_throughput_enabled is True
+            assert training_config.training_loop_config is not None
+            assert training_config.training_loop_config.log_every_n_train_iterations == 100
+            assert training_config.training_loop_config.micro_batch_size == 8
+            assert training_config.training_loop_config.flops_per_sample == 1000
+            assert training_config.training_loop_config.train_iterations_target == 10000
+            assert training_config.training_loop_config.train_samples_target == 100000
 
             # Verify real provider was configured
             provider = TrainingTelemetryProvider.instance()
@@ -595,16 +598,17 @@ class TestConfigureV2Adapter:
 
             # 2. Verify ConfigAdapter conversion worked correctly
             assert training_config.application_name == "e2e_test"
-            assert training_config.perf_tag_or_fn == "e2e_tag"
-            assert training_config.session_tag_or_fn == "e2e_run"
-            assert training_config.is_baseline_run_or_fn is True
-            assert training_config.world_size_or_fn == 8
-            assert training_config.global_batch_size_or_fn == 256
-            assert training_config.is_train_iterations_enabled_or_fn is True
-            assert training_config.is_validation_iterations_enabled_or_fn is False
+            assert training_config.session_tag == "e2e_run"
+            assert training_config.is_baseline_run is True
+            assert training_config.is_train_iterations_enabled is True
+            assert training_config.is_validation_iterations_enabled is False
             assert "test_type" in training_config.custom_metadata
             assert training_config.custom_metadata["test_type"] == "end_to_end"
             assert training_config.custom_metadata["app_tag_run_version"] == "1.0.0"
+            assert training_config.training_loop_config is not None
+            assert training_config.training_loop_config.perf_tag == "e2e_tag"
+            assert training_config.training_loop_config.world_size == 8
+            assert training_config.training_loop_config.global_batch_size == 256
             assert wandb_config is not None
 
             # 3. Verify provider is fully configured and ready
@@ -615,7 +619,8 @@ class TestConfigureV2Adapter:
             # 4. Verify provider has access to the configuration
             provider_config = provider.config
             assert provider_config.application_name == "e2e_test"
-            assert provider_config.world_size_or_fn == 8
+            assert provider_config.training_loop_config is not None
+            assert provider_config.training_loop_config.world_size == 8
 
             # 5. Verify provider has access to the recorder
             recorder = provider.recorder

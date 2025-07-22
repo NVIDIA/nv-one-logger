@@ -139,7 +139,7 @@ class TestOTelExporter:
         # The onelogger span id and duration attributes are automatically added
         assert exported_span.attributes == {
             "one_logger_span_id": test_span.id.int,
-            StandardSpanAttributeName.DURATION_MSEC.value: 5310,
+            StandardSpanAttributeName.DURATION_MSEC: 5310,
         }
         assert exported_span.parent is None
         assert exported_span.context is not None
@@ -215,7 +215,7 @@ class TestOTelExporter:
         assert exported_span.attributes == {
             "one_logger_span_id": test_span.id.int,
             "span_attrib_key": "span_attrib_val",
-            StandardSpanAttributeName.DURATION_MSEC.value: 5310,
+            StandardSpanAttributeName.DURATION_MSEC: 5310,
         }
         assert exported_span.context is not None
         assert exported_span.status.is_ok
@@ -306,7 +306,7 @@ class TestOTelExporter:
         real_span = exported_spans[4]
         assert real_span.attributes == {
             "one_logger_span_id": test_span.id.int,
-            StandardSpanAttributeName.DURATION_MSEC.value: 10500,  # 2.5 seconds + 7 seconds + 1 second
+            StandardSpanAttributeName.DURATION_MSEC: 10500,  # 2.5 seconds + 7 seconds + 1 second
         }
         assert len(real_span.events) == 4
         assert real_span.events[0].name == "span_start"
@@ -341,9 +341,9 @@ class TestOTelExporter:
         assert len(telemetry_data_error_span.events) == 1
         event = telemetry_data_error_span.events[0]
         assert telemetry_data_error_span.name == "span_for_telemetry_data_error"
-        assert event.name == StandardEventName.TELEMETRY_DATA_ERROR.value
+        assert event.name == StandardEventName.TELEMETRY_DATA_ERROR
         assert event.attributes == {
-            StandardEventAttributeName.TELEMETRY_DATA_ERROR_TYPE: error_type.value,
+            StandardEventAttributeName.TELEMETRY_DATA_ERROR_TYPE: error_type,
             StandardEventAttributeName.ERROR_MESSAGE: "Test telemetry data error message",
             StandardEventAttributeName.TIMESTAMP_MSEC: timestamp.milliseconds_since_epoch,
         }
@@ -402,7 +402,7 @@ class TestOTelExporter:
         real_span = exported_spans[3]
         assert real_span.attributes == {
             "one_logger_span_id": test_span.id.int,
-            StandardSpanAttributeName.DURATION_MSEC.value: 3500,  # 2.5 seconds + 1 second
+            StandardSpanAttributeName.DURATION_MSEC: 3500,  # 2.5 seconds + 1 second
         }
         assert len(real_span.events) == 3
         assert real_span.events[0].name == "span_start"

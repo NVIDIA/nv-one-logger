@@ -365,7 +365,7 @@ def on_save_checkpoint_success(global_step: int, time_msec: Optional[float] = No
     """Call when the checkpoint saving succeeds. Works both for sync and async checkpoint saving.
 
     This callback creates an event of type StandardTrainingJobEventName.SAVE_CHECKPOINT_SUCCESS and adds it to
-    either CHECKPOINT_SAVE_SYNC span (for CheckPointStrategy.SYNC) or TRAINING_LOOP span (for CheckPointStrategy.ASYNC).
+    either CHECKPOINT_SAVE_SYNC span (for CheckPointStrategy.SYNC) or APPLICATION span (for CheckPointStrategy.ASYNC).
     See the comments on StandardTrainingJobEventName.SAVE_CHECKPOINT_SUCCESS for more details.
 
     Args:

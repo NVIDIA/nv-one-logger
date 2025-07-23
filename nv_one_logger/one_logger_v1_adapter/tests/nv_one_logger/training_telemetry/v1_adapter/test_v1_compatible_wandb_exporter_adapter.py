@@ -24,7 +24,7 @@ from nv_one_logger.training_telemetry.api.attributes import (
     ValidationMetricsUpdateAttributes,
 )
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
@@ -108,17 +108,40 @@ class TestV1CompatibleWandbExporterAdapter:
         adapter: V1CompatibleWandbExporterAdapter,
     ) -> None:
         """Test _perf_tag_dict method with string perf_tag."""
-        assert adapter._training_telemetry_config.training_loop_config is not None
-        adapter._training_telemetry_config.training_loop_config.perf_tag_or_fn = "test_perf"
-        result = adapter._perf_tag_dict(adapter._training_telemetry_config)
+        # Test with string perf_tag
+        config_with_string_perf = TrainingTelemetryConfig(
+            application_name="test_app",
+            session_tag_or_fn="test_session",
+            app_type_or_fn=ApplicationType.TRAINING,
+            is_baseline_run_or_fn=False,
+            enable_for_current_rank=True,
+            training_loop_config=TrainingLoopConfig(
+                perf_tag_or_fn="test_perf",
+                world_size_or_fn=10,
+                global_batch_size_or_fn=32,
+            ),
+        )
 
+        result = adapter._perf_tag_dict(config_with_string_perf)
         assert result["app_tag"] == ["test_perf"]
         assert len(result["app_tag_id"]) == 1
         assert result["app_tag_count"] == 1
 
-        adapter._training_telemetry_config.training_loop_config.perf_tag_or_fn = ["perf1", "perf2"]
-        result = adapter._perf_tag_dict(adapter._training_telemetry_config)
+        # Test with list perf_tag
+        config_with_list_perf = TrainingTelemetryConfig(
+            application_name="test_app",
+            session_tag_or_fn="test_session",
+            app_type_or_fn=ApplicationType.TRAINING,
+            is_baseline_run_or_fn=False,
+            enable_for_current_rank=True,
+            training_loop_config=TrainingLoopConfig(
+                perf_tag_or_fn=["perf1", "perf2"],
+                world_size_or_fn=10,
+                global_batch_size_or_fn=32,
+            ),
+        )
 
+        result = adapter._perf_tag_dict(config_with_list_perf)
         assert result["app_tag"] == ["perf1", "perf2"]
         assert len(result["app_tag_id"]) == 2
         assert result["app_tag_count"] == 2

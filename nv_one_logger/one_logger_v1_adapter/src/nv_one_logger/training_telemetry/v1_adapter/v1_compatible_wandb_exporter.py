@@ -30,6 +30,7 @@ from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
+from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 from nv_one_logger.wandb.exporter.wandb_exporter import Config as WandBConfig
 from nv_one_logger.wandb.exporter.wandb_exporter import (
     HierarchicalMetricNamingStrategy,
@@ -82,7 +83,20 @@ class V1CompatibleWandbExporterAdapter:
         Args:
             training_telemetry_config: The corresponding v2 configuration.
         """
-        self._training_telemetry_config = training_telemetry_config
+        # Store the initial config for backward compatibility, but prefer getting current config from provider
+        self._initial_training_telemetry_config = training_telemetry_config
+
+    def _get_current_config(self) -> TrainingTelemetryConfig:
+        """Get the current training telemetry config from the provider.
+
+        Since the config may be set partially at the beginning of the job and the training_loop_config
+        provided later, we need to get the most recent version of the config each time we want to read the config.
+        """
+        try:
+            return TrainingTelemetryProvider.instance().config
+        except Exception:
+            # Fallback to initial config if provider is not available
+            return self._initial_training_telemetry_config
 
     def extract_v1_metrics_for_span_start(self, span: Span) -> dict[str, Any]:
         """Extract v1 metrics for a span start event."""
@@ -286,7 +300,7 @@ class V1CompatibleWandbExporterAdapter:
                 _MetricMapping("model_seq_length", attributes.seq_length),
             ]
         )
-        metrics_to_log.update(self._perf_tag_dict(self._training_telemetry_config))
+        metrics_to_log.update(self._perf_tag_dict(self._get_current_config()))
         return metrics_to_log
 
     def _metrics_for_training_loop_stop(self, span: Span) -> dict[str, Any]:
@@ -327,7 +341,7 @@ class V1CompatibleWandbExporterAdapter:
                 _MetricMapping("train_samples_end", attributes.train_samples_start + attributes.num_train_samples),
             ]
         )
-        metrics_to_log.update(self._perf_tag_dict(self._training_telemetry_config))
+        metrics_to_log.update(self._perf_tag_dict(self._get_current_config()))
         return metrics_to_log
 
     def _metrics_for_validation_metrics_update_event(self, event: Event, span: Span) -> dict[str, Any]:
@@ -385,7 +399,7 @@ class V1CompatibleWandbExporterAdapter:
                 _MetricMapping("validation_iterations_time_total_productive", attributes.productive_validation_iterations_sec),
             ]
         )
-        save_checkpoint_strategy = self._training_telemetry_config.save_checkpoint_strategy  # type: ignore[report-optional-member-access]
+        save_checkpoint_strategy = self._get_current_config().save_checkpoint_strategy  # type: ignore[report-optional-member-access]
         if save_checkpoint_strategy == CheckPointStrategy.SYNC:
             # In v1, we only report the first/last save times for sync checkpoints.
             metrics_to_log.update(

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nv-one-logger-v1-adapter"
-version = "2.0.2"
+version = "2.0.3"
 description = "Adapter that allows smooth transition from v1 to v2 of the OneLogger."
 authors = ["HWInf-MLWFO <HWInf-MLWFO-E2E-Dev@exchange.nvidia.com>"]
 readme = "README.md"

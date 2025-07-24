@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import pytorch_lightning as ptl
+from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.utils import patch_method
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
+from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 from overrides import override
 from pytorch_lightning import Callback, Trainer
@@ -105,11 +107,21 @@ class TimeEventCallback(Callback):
     @override
     def on_validation_end(self, trainer: ptl.Trainer, pl_module: ptl.LightningModule) -> None:
         """Execute when the validation loop ends."""
+        # TODO(bqi): This is safety net logic as PTL bug is not fixed yet.
+        # PTL bug: https://github.com/Lightning-AI/pytorch-lightning/issues/20999
+        active_spans = TrainingTelemetryProvider.instance().recorder.get_active_spans_by_name(StandardTrainingJobSpanName.VALIDATION_SINGLE_ITERATION)
+        if OneLoggerProvider.instance().one_logger_enabled and len(active_spans) > 0:
+            on_validation_single_iteration_end()
         on_validation_end()
 
     @override
     def on_validation_batch_start(self, trainer: ptl.Trainer, pl_module: ptl.LightningModule, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Execute when the validation batch begins."""
+        # TODO(bqi): This is safety net logic as PTL bug is not fixed yet.
+        # PTL bug: https://github.com/Lightning-AI/pytorch-lightning/issues/20999
+        active_spans = TrainingTelemetryProvider.instance().recorder.get_active_spans_by_name(StandardTrainingJobSpanName.VALIDATION_SINGLE_ITERATION)
+        if OneLoggerProvider.instance().one_logger_enabled and len(active_spans) > 0:
+            on_validation_single_iteration_end()
         on_validation_single_iteration_start()
 
     @override
@@ -290,7 +302,7 @@ def hook_trainer_cls(
             raise ValueError("The 'callbacks' argument must be a list.")
 
         # Add time_event_callback to the callbacks list
-        callbacks.append(telemetry_callback)  # type: ignore[reportUnknownMemberType]
+        callbacks = [telemetry_callback] + callbacks
         kwargs["callbacks"] = callbacks
 
         # Call the original __init__ method
@@ -338,8 +350,7 @@ class OneLoggerPTLTrainer(Trainer):
             training_telemetry_provider (TrainingTelemetryProvider): The training telemetry provider.
         """
         self._nv_one_logger_callback = TimeEventCallback(training_telemetry_provider)
-        callbacks = trainer_config.get("callbacks", [])
-        callbacks.append(self._nv_one_logger_callback)
+        callbacks = [self._nv_one_logger_callback] + trainer_config.get("callbacks", [])
         trainer_config["callbacks"] = callbacks
 
         self._save_checkpoint_strategy = training_telemetry_provider.config.save_checkpoint_strategy

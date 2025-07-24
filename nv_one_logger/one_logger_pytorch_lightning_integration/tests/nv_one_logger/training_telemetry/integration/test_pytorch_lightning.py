@@ -7,6 +7,7 @@ from typing import Any, Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
+import pytorch_lightning as ptl
 import torch
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.exceptions import OneLoggerError
@@ -14,12 +15,17 @@ from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.exporter.exporter import Exporter
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader, TensorDataset
 
-from nv_one_logger.training_telemetry.integration.pytorch_lightning import OneLoggerPTLTrainer, hook_trainer_cls
+from nv_one_logger.training_telemetry.integration.pytorch_lightning import (
+    OneLoggerPTLTrainer,
+    TimeEventCallback,
+    hook_trainer_cls,
+)
 
 
 class DummyModel(LightningModule):
@@ -93,6 +99,7 @@ def config(request: pytest.FixtureRequest) -> TrainingTelemetryConfig:
         application_name="test_app",
         session_tag_or_fn="test_session",
         enable_one_logger=True,
+        enable_for_current_rank=True,
         save_checkpoint_strategy=checkpoint_strategy,
         training_loop_config=TrainingLoopConfig(
             perf_tag_or_fn="test_perf",
@@ -348,4 +355,139 @@ def test_explicit_telemetry_callback_invocation(
             # Restore the original methods
             Trainer.__init__ = original_init
             Trainer.save_checkpoint = original_save_checkpoint
+
+
+@pytest.mark.parametrize("config", [CheckPointStrategy.SYNC], indirect=True, ids=["sync"])
+def test_on_validation_batch_start_auto_end_previous_validation_single_iteration(
+    dummy_data: tuple[DataLoader[tuple[torch.Tensor, torch.Tensor]], DataLoader[tuple[torch.Tensor, torch.Tensor]]],
+) -> None:
+    """Test auto calling on_validation_batch_end when validation_step returns None.
+
+    This test verifies the actual PyTorch Lightning scenario where validation_step returns None,
+    which can cause PyTorch Lightning to skip calling on_validation_batch_end, but our integration still calls it.
+    """
+    _, val_loader = dummy_data
+
+    # Create a mock model that returns None from validation_step
+    model_with_none_step = MagicMock()
+    model_with_none_step.validation_step.return_value = None
+
+    # Create a telemetry callback
+    telemetry_callback = TimeEventCallback(TrainingTelemetryProvider.instance())
+
+    batch = next(iter(val_loader))
+    trainer = Trainer()
+
+    # Start validation loop
+    telemetry_callback.on_validation_start(trainer, model_with_none_step)
+
+    # Start first validation iteration
+    telemetry_callback.on_validation_batch_start(trainer, model_with_none_step, batch, batch_idx=0)
+    timer = telemetry_callback._provider.recorder._training_state.multi_iteration_timers[StandardTrainingJobSpanName.VALIDATION_SINGLE_ITERATION]
+    assert timer.is_active, "Timer should be active after starting validation iteration"
+
+    # Simulate the model's validation_step returning None (which happens in our mock model)
+    # In real PyTorch Lightning, this could cause on_validation_batch_end to be skipped
+    result = model_with_none_step.validation_step(batch, 0)
+    assert result is None, "Validation step should return None"
+
+    # Simulate PyTorch Lightning skipping on_validation_batch_end and starting next iteration
+    # The safety mechanism should handle this
+    telemetry_callback.on_validation_batch_start(trainer, model_with_none_step, batch, batch_idx=1)
+
+    # Verify timer is still active (new iteration started) and safety mechanism worked
+    assert timer.is_active, "Timer should still be active after safety mechanism"
+
+    # End the validation properly
+    telemetry_callback.on_validation_batch_end(trainer, model_with_none_step, None, batch, batch_idx=1)
+    telemetry_callback.on_validation_end(trainer, model_with_none_step)
+
+    # Verify cleanup
+    assert not timer.is_active, "Timer should be inactive after proper cleanup"
+
+
+@pytest.mark.parametrize("config", [CheckPointStrategy.SYNC], indirect=True, ids=["sync"])
+@pytest.mark.parametrize("use_hook_trainer_cls", [True, False], ids=["use_hook_trainer_cls", "use_one_logger_ptl_trainer"])
+def test_telemetry_callback_is_first_in_callback_list(
+    use_hook_trainer_cls: bool,
+) -> None:
+    """Test that the telemetry callback is placed at the beginning of the callback list.
+
+    This ensures that telemetry events are captured before any other callbacks run,
+    which is important for accurate timing measurements.
+
+    Args:
+        use_hook_trainer_cls (bool): Whether to use the hook_trainer_cls function to patch the Trainer class or use
+        the OneLoggerPTLTrainer class directly.
+    """
+    # Create some dummy callbacks for testing
+    dummy_callback_1 = MagicMock(spec=ptl.Callback)
+    dummy_callback_2 = MagicMock(spec=ptl.Callback)
+    dummy_callbacks = [dummy_callback_1, dummy_callback_2]
+
+    trainer_config: dict[str, Any] = {
+        "max_epochs": 1,
+        "limit_train_batches": 1,
+        "limit_val_batches": 1,
+        "logger": False,
+        "callbacks": dummy_callbacks,
+    }
+
+    # To ensure test unit isolation, we need to undo what hook_trainer_cls does at the end of the test.
+    original_init = Trainer.__init__
+    original_save_checkpoint = Trainer.save_checkpoint
+
+    try:
+        if use_hook_trainer_cls:
+            HookedTrainer, telemetry_callback = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
+            trainer = HookedTrainer(**trainer_config)
+            assert telemetry_callback == trainer.nv_one_logger_callback
+        else:
+            trainer = OneLoggerPTLTrainer(
+                trainer_config=trainer_config,
+                training_telemetry_provider=TrainingTelemetryProvider.instance(),
+            )
+            telemetry_callback = trainer.nv_one_logger_callback
+
+        # Verify that the telemetry callback is at the beginning of the callbacks list
+        callbacks = trainer.callbacks
+        assert len(callbacks) >= 3, f"Expected at least 3 callbacks (telemetry + 2 dummy), got {len(callbacks)}"
+
+        # The first callback should be the telemetry callback
+        assert isinstance(callbacks[0], TimeEventCallback), f"First callback should be TimeEventCallback, got {type(callbacks[0])}"
+        assert callbacks[0] is telemetry_callback, "First callback should be the same instance as the telemetry callback"
+
+        # The dummy callbacks should follow after the telemetry callback
+        # Note: PyTorch Lightning may add additional callbacks, so we check that our dummy callbacks
+        # are present in the expected order after the telemetry callback
+        dummy_callback_indices = []
+        for i, callback in enumerate(callbacks):
+            if callback in dummy_callbacks:
+                dummy_callback_indices.append(i)
+
+        assert len(dummy_callback_indices) == 2, f"Expected to find 2 dummy callbacks, found {len(dummy_callback_indices)}"
+
+        # Find the positions of our dummy callbacks
+        dummy_1_index = None
+        dummy_2_index = None
+        for i, callback in enumerate(callbacks):
+            if callback is dummy_callback_1:
+                dummy_1_index = i
+            elif callback is dummy_callback_2:
+                dummy_2_index = i
+
+        assert dummy_1_index is not None, "dummy_callback_1 not found in callbacks list"
+        assert dummy_2_index is not None, "dummy_callback_2 not found in callbacks list"
+
+        # Both dummy callbacks should come after the telemetry callback (index 0)
+        assert dummy_1_index > 0, f"dummy_callback_1 should come after telemetry callback, but is at index {dummy_1_index}"
+        assert dummy_2_index > 0, f"dummy_callback_2 should come after telemetry callback, but is at index {dummy_2_index}"
+
+        # The dummy callbacks should maintain their relative order
+        assert dummy_1_index < dummy_2_index, f"dummy_callback_1 (index {dummy_1_index}) should come before dummy_callback_2 (index {dummy_2_index})"
+
+    finally:
+        if use_hook_trainer_cls:
+            # Restore the original methods
+            Trainer.__init__ = original_init
             Trainer.save_checkpoint = original_save_checkpoint

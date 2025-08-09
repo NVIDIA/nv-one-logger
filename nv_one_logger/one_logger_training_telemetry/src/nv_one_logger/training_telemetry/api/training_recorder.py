@@ -302,16 +302,22 @@ class TrainingRecorder(DefaultRecorder):
         if not stop_time:
             stop_time = TracingTimestamp.now()
 
-        # Extra check to make sure the timer has been stopped (if this spans corresponds to a multi-iteration operation).
-        # You may be tempted to stop the timer here but this wouldn't work because for some of the on_xxx_end methods,
-        # we first need to stop the timers, then use the updated timer stats to set the attributes for spans or events,
-        # and then we need to call super().stop() to stop the span. So we are leaving the responsibility of stopping the timers to
-        # the individual on_xxx_stop methods but do a check here to catch cases that the timer is not stopped there.
         if span.name in self._training_state.multi_iteration_timers.keys():
-            assert_that(
-                not self._training_state.multi_iteration_timers[span.name].is_active,  # type: ignore[reportArgumentType]
-                f"Timer for span {span.name} is still active.",
-            )
+            timer = self._training_state.multi_iteration_timers[span.name]
+            # Fail-safe timer stops here to prevent unexpected exits if the timer is not stopped by the user.
+            if timer.is_active:
+                timer.stop(stop_time)
+
+                # Record an error event on the span to indicate that the timer was forced to stop
+                self.error(
+                    span=span,
+                    error_message=(
+                        f"Timer for span {span.name} was automatically stopped because the span is being stopped. "
+                        "This may indicate that the corresponding on_xxx_end method was not called correctly. "
+                        "If the program exited properly, please double-check your on_xxx_end callback. "
+                        "If the program exited abnormally (e.g., due to an exception), this is expected."
+                    ),
+                )
 
         super().stop(
             span=span,

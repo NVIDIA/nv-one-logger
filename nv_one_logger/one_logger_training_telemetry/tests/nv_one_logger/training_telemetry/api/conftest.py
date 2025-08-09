@@ -50,6 +50,7 @@ def config() -> TrainingTelemetryConfig:
         session_tag_or_fn="test_session",
         enable_one_logger=True,
         enable_for_current_rank=True,
+        is_save_checkpoint_enabled_or_fn=True,
         is_log_throughput_enabled_or_fn=True,
         training_loop_config=TrainingLoopConfig(
             perf_tag_or_fn="test_perf",

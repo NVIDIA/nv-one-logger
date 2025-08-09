@@ -74,6 +74,9 @@ ptl-int-unit-tests:
     name: python:3.10
   before_script:
   script:
+    - echo "setting up PYTHONPATH for all nv-one-logger packages"
+    - export PYTHONPATH="${CI_PROJECT_DIR}/nv_one_logger/one_logger_core/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_training_telemetry/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_wandb/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_otel/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_pytorch_lightning_integration/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_v1_adapter/src:${PYTHONPATH}"
+    - echo "PYTHONPATH set to ${PYTHONPATH}"
     - echo "installing poetry."
     - pip install poetry==2.0.1 wheel
     - cd nv_one_logger/one_logger_pytorch_lightning_integration

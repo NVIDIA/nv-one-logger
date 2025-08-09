@@ -160,13 +160,14 @@ class TestV1CompatibleWandbExporterAdapter:
         )
 
         span_start_metrics = adapter.extract_v1_metrics_for_span_start(app_span)
+        # NOTE: we don't want to test the one_logger_version here as it can be changed when dependencies are updated.
+        span_start_metrics.pop("one_logger_version")
 
         assert span_start_metrics == {
             "app_start_time": START_TIME_SEC * 1000,
             "app_first_log_time": START_TIME_SEC * 1000,
             "job_start_time": 0,
             "limit_run": 0,
-            "one_logger_version": "2.0.1",
         }
 
         one_logger_init_attributes = OneLoggerInitializationAttributes.create(

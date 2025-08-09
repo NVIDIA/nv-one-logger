@@ -274,7 +274,9 @@ class DefaultRecorder(Recorder):
         See the docstrings of the Recorder interface for more details.
         """
         # Whatever is left in the _spans dict, is an active span, we need to stop it.
-        for span in reversed(self._spans.values()):
+        # Create a copy of the spans to avoid OrderedDict mutation during iteration
+        active_spans = list(self._spans.values())
+        for span in reversed(active_spans):
             self.stop(span)
         self._spans.clear()
 

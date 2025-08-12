@@ -3,11 +3,11 @@
 import uuid
 from typing import Any, Dict, Tuple
 
-from nv_one_logger.api.config import ApplicationType, OneLoggerErrorHandlingStrategy
+from nv_one_logger.api.config import OneLoggerConfig, OneLoggerErrorHandlingStrategy
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.utils import evaluate_value
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.wandb.exporter.wandb_exporter import Config as WandBConfig
 
 
@@ -21,14 +21,14 @@ class ConfigAdapter:
     """
 
     @staticmethod
-    def convert_to_v2_config(v1_config: Dict[str, Any]) -> Tuple[TrainingTelemetryConfig, WandBConfig]:
+    def convert_to_v2_config(v1_config: Dict[str, Any]) -> Tuple[OneLoggerConfig, WandBConfig]:
         """Convert the v1 config to the v2 config. See class docstring for more details.
 
         Args:
             v1_config (Dict[str, Any]): The v1 config.
 
         Returns:
-            TrainingTelemetryConfig: The v2 config.
+            Tuple[OneLoggerConfig, WandBConfig]: The v2 config with embedded telemetry config, and wandb config.
         """
         custom_metadata = evaluate_value(v1_config.get("metadata", {}))
         # NOTE: We deprecated "app_tag_run_version" for v2, but during the transition, we pass the "app_tag_run_version"
@@ -37,35 +37,37 @@ class ConfigAdapter:
 
         enable_for_current_rank = v1_config.get("enable_for_current_rank", False)
 
-        training_telemetry_config = TrainingTelemetryConfig(
+        # Create the training telemetry config
+        training_config = TrainingTelemetryConfig(
+            perf_tag_or_fn=v1_config["app_tag"],
+            global_batch_size_or_fn=v1_config["global_batch_size"],
+            log_every_n_train_iterations=v1_config.get("log_every_n_train_iterations", 50),
+            save_checkpoint_strategy=ConfigAdapter._convert_ckpt_strategy_to_enum(v1_config.get("save_checkpoint_strategy", "sync")),
+            micro_batch_size_or_fn=v1_config.get("micro_batch_size", None),
+            flops_per_sample_or_fn=v1_config.get("flops_per_sample", None),
+            train_iterations_target_or_fn=v1_config.get("train_iterations_target", None),
+            train_samples_target_or_fn=v1_config.get("train_samples_target", None),
+            is_train_iterations_enabled_or_fn=v1_config["is_train_iterations_enabled"],
+            is_validation_iterations_enabled_or_fn=v1_config["is_validation_iterations_enabled"],
+            is_test_iterations_enabled_or_fn=v1_config.get("is_test_iterations_enabled", True),
+            is_save_checkpoint_enabled_or_fn=v1_config.get("is_save_checkpoint_enabled", True),
+            is_log_throughput_enabled_or_fn=v1_config.get("is_log_throughput_enabled", False),
+        )
+
+        # Create the base config with embedded telemetry config
+        base_config = OneLoggerConfig(
             application_name=v1_config["one_logger_project"],
+            world_size_or_fn=v1_config["world_size"],
             session_tag_or_fn=v1_config["app_tag_run_name"],
-            app_type_or_fn=ApplicationType.TRAINING,
-            is_baseline_run_or_fn=v1_config["is_baseline_run"],
+            is_baseline_run_or_fn=v1_config.get("is_baseline_run", False),
             custom_metadata=custom_metadata,
             error_handling_strategy=(
                 OneLoggerErrorHandlingStrategy.DISABLE_QUIETLY_AND_REPORT_METRIC_ERROR
                 if v1_config.get("quiet", False)
                 else OneLoggerErrorHandlingStrategy.PROPAGATE_EXCEPTIONS
             ),
-            enable_one_logger=enable_for_current_rank,
             enable_for_current_rank=enable_for_current_rank,
-            is_train_iterations_enabled_or_fn=v1_config["is_train_iterations_enabled"],
-            is_validation_iterations_enabled_or_fn=v1_config["is_validation_iterations_enabled"],
-            is_test_iterations_enabled_or_fn=v1_config.get("is_test_iterations_enabled", True),
-            is_save_checkpoint_enabled_or_fn=v1_config.get("is_save_checkpoint_enabled", True),
-            is_log_throughput_enabled_or_fn=v1_config.get("is_log_throughput_enabled", False),
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn=v1_config["app_tag"],
-                world_size_or_fn=v1_config["world_size"],
-                global_batch_size_or_fn=v1_config["global_batch_size"],
-                log_every_n_train_iterations=v1_config.get("log_every_n_train_iterations", 50),
-                save_checkpoint_strategy=ConfigAdapter._convert_ckpt_strategy_to_enum(v1_config.get("save_checkpoint_strategy", "sync")),
-                micro_batch_size_or_fn=v1_config.get("micro_batch_size", None),
-                flops_per_sample_or_fn=v1_config.get("flops_per_sample", None),
-                train_iterations_target_or_fn=v1_config.get("train_iterations_target", None),
-                train_samples_target_or_fn=v1_config.get("train_samples_target", None),
-            ),
+            telemetry_config=training_config,
         )
 
         wandb_config = WandBConfig(
@@ -74,7 +76,7 @@ class ConfigAdapter:
             run_name=v1_config.get("one_logger_run_name", str(uuid.uuid4())),
         )
 
-        return training_telemetry_config, wandb_config
+        return base_config, wandb_config
 
     @staticmethod
     def _convert_ckpt_strategy_to_enum(v1_strategy: str) -> CheckPointStrategy:

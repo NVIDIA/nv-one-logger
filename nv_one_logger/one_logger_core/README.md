@@ -8,6 +8,8 @@ The following are the dependency rules for various packages (which we will enfor
 
 - core: Classes representing core concepts such as span, event, attributes. All other packages can depend on this package but this package must not depend on any one_logger or telemetry package. Moreover, we must try to minimize the third-party dependencies of this package so that it remains lightweight and easy to adopt by internal and external users (any new dependency can conflict with existing dependencies of the app that is being instrumented).
 
+**New in v2.1.0:** Added `TelemetryConfig` Protocol to support telemetry-specific configurations without creating circular dependencies.
+
 - exporter: This package will contain code for various supported exporters. We have a few simple exporters in one_logger_core project. Vendor-specific exporters (OTEL, Kafka, etc) can be added to extend the system. However, each exporter must be added in a separate Python project so that we don't pull in extra dependencies in the `one_logger_cor`e` project.
 
 - api: This package contains the API to record spans and events.

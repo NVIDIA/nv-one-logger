@@ -6,7 +6,6 @@ from unittest import mock
 from unittest.mock import MagicMock, Mock
 
 import pytest
-from nv_one_logger.api.config import ApplicationType
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.attributes import Attributes
 from nv_one_logger.core.event import Event
@@ -24,7 +23,7 @@ from nv_one_logger.training_telemetry.api.attributes import (
     ValidationMetricsUpdateAttributes,
 )
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
@@ -91,13 +90,33 @@ def configure_provider(
     with SingletonMeta._lock:
         SingletonMeta._instances.pop(TrainingTelemetryProvider, None)
         SingletonMeta._instances.pop(OneLoggerProvider, None)
-    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider()
+
+    # Create a proper OneLoggerConfig from the TrainingTelemetryConfig
+    from nv_one_logger.api.config import OneLoggerConfig
+
+    one_logger_config = OneLoggerConfig(
+        application_name="test_app",
+        session_tag_or_fn="test_session",
+        world_size_or_fn=8,
+        telemetry_config=config,
+    )
+
+    TrainingTelemetryProvider.instance().with_base_config(one_logger_config).with_exporter(mock_exporter).configure_provider()
 
 
 @pytest.fixture
 def adapter(config: TrainingTelemetryConfig) -> V1CompatibleWandbExporterAdapter:
     """Create a V1CompatibleWandbExporterAdapter instance."""
-    return V1CompatibleWandbExporterAdapter(config)
+    # Create a proper OneLoggerConfig from the TrainingTelemetryConfig
+    from nv_one_logger.api.config import OneLoggerConfig
+
+    one_logger_config = OneLoggerConfig(
+        application_name="test_app",
+        session_tag_or_fn="test_session",
+        world_size_or_fn=8,
+        telemetry_config=config,
+    )
+    return V1CompatibleWandbExporterAdapter(one_logger_config)
 
 
 class TestV1CompatibleWandbExporterAdapter:
@@ -109,15 +128,14 @@ class TestV1CompatibleWandbExporterAdapter:
     ) -> None:
         """Test _perf_tag_dict method with string perf_tag."""
         # Test with string perf_tag
-        config_with_string_perf = TrainingTelemetryConfig(
+        from nv_one_logger.api.config import OneLoggerConfig
+
+        config_with_string_perf = OneLoggerConfig(
             application_name="test_app",
             session_tag_or_fn="test_session",
-            app_type_or_fn=ApplicationType.TRAINING,
-            is_baseline_run_or_fn=False,
-            enable_for_current_rank=True,
-            training_loop_config=TrainingLoopConfig(
+            world_size_or_fn=8,
+            telemetry_config=TrainingTelemetryConfig(
                 perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
                 global_batch_size_or_fn=32,
             ),
         )
@@ -128,15 +146,12 @@ class TestV1CompatibleWandbExporterAdapter:
         assert result["app_tag_count"] == 1
 
         # Test with list perf_tag
-        config_with_list_perf = TrainingTelemetryConfig(
+        config_with_list_perf = OneLoggerConfig(
             application_name="test_app",
             session_tag_or_fn="test_session",
-            app_type_or_fn=ApplicationType.TRAINING,
-            is_baseline_run_or_fn=False,
-            enable_for_current_rank=True,
-            training_loop_config=TrainingLoopConfig(
+            world_size_or_fn=8,
+            telemetry_config=TrainingTelemetryConfig(
                 perf_tag_or_fn=["perf1", "perf2"],
-                world_size_or_fn=10,
                 global_batch_size_or_fn=32,
             ),
         )
@@ -171,20 +186,14 @@ class TestV1CompatibleWandbExporterAdapter:
         }
 
         one_logger_init_attributes = OneLoggerInitializationAttributes.create(
+            world_size=8,
             one_logger_training_telemetry_version="2.0.1",
             enable_for_current_rank=True,
             session_tag="fake_session_tag",
-            app_type=ApplicationType.TRAINING,
             is_baseline_run=False,
-            is_train_iterations_enabled=True,
-            is_validation_iterations_enabled=True,
-            is_test_iterations_enabled=True,
-            is_save_checkpoint_enabled=True,
-            is_log_throughput_enabled=True,
+            summary_data_schema_version="1.0",
             node_name=socket.gethostname(),
             rank=0,
-            checkpoint_strategy=CheckPointStrategy.SYNC,
-            summary_data_schema_version="1.0",
             custom_metadata={"app_tag_run_version": "2.3.4"},
         )
         advance_time(mock_time, mock_perf_counter, 10)
@@ -198,16 +207,10 @@ class TestV1CompatibleWandbExporterAdapter:
         assert initialization_event_metrics == {
             "app_tag_run_name": one_logger_init_attributes.session_tag,
             "summary_data_schema_version": "1.0",
-            "app_run_type": ApplicationType.TRAINING,
             "app_metrics_feature_tags": "full",
             "is_baseline_run": False,
-            "is_train_iterations_enabled": one_logger_init_attributes.is_train_iterations_enabled,
-            "is_validation_iterations_enabled": one_logger_init_attributes.is_validation_iterations_enabled,
-            "is_test_iterations_enabled": one_logger_init_attributes.is_test_iterations_enabled,
-            "is_save_checkpoint_enabled": one_logger_init_attributes.is_save_checkpoint_enabled,
-            "is_log_throughput_enabled": one_logger_init_attributes.is_log_throughput_enabled,
             "app_tag_run_version": "2.3.4",
-            "save_checkpoint_strategy": "sync",
+            "world_size": 8,
         }
 
         advance_time(mock_time, mock_perf_counter, 50)
@@ -316,17 +319,11 @@ class TestV1CompatibleWandbExporterAdapter:
     ) -> None:
         """Test the extracted metrics for TRAINING_LOOP span and its TRAINING_METRICS_UPDATE event."""
         training_loop_attributes = TrainingLoopAttributes.create(
-            perf_tag="fake_perf_tag",
-            log_every_n_train_iterations=10,
-            world_size=10,
-            global_batch_size=32,
             train_iterations_start=10,
             train_samples_start=320,
             train_iterations_target=1000,
             train_samples_target=32000,
             train_tokens_target=1024 * 32000,
-            micro_batch_size=1,
-            seq_length=512,
         )
         training_loop_span = Span.create(
             name=StandardTrainingJobSpanName.TRAINING_LOOP,
@@ -336,21 +333,12 @@ class TestV1CompatibleWandbExporterAdapter:
         metrics = adapter.extract_v1_metrics_for_span_start(training_loop_span)
 
         assert metrics == {
-            "app_tag": ["test_perf"],
-            "app_tag_id": ["2eee30ac275fc16962ae8d2472a7b68d"],
-            "app_tag_count": 1,
-            "world_size": 10,
-            "global_batch_size": 32,
             "train_iterations_start": 10,
             "train_iterations_end": 10,
             "train_samples_start": 320,
             "train_samples_end": 320,
-            "train_iterations_target": 1000,
-            "train_samples_target": 32000,
-            "app_train_loop_start_time": START_TIME_SEC * 1000,
             "train_tokens_target": 1024 * 32000,
-            "micro_batch_size": 1,
-            "model_seq_length": 512,
+            "app_train_loop_start_time": START_TIME_SEC * 1000,
         }
 
         advance_time(mock_time, mock_perf_counter, 50)

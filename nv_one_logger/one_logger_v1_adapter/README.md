@@ -14,31 +14,39 @@ The `V1CompatibleExporter` class provides a unified interface for creating v1-co
 
 ```python
 from nv_one_logger.training_telemetry.v1_adapter import V1CompatibleExporter
+from nv_one_logger.api.config import OneLoggerConfig
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
-# Create a training telemetry config
-config = TrainingTelemetryConfig(
+# Create base and training configs
+base_config = OneLoggerConfig(
     application_name="my_app",
-    perf_tag_or_fn="my_perf_tag",
     session_tag_or_fn="my_session",
-    # ... other config parameters
+    world_size_or_fn=1,
+)
+
+training_config = TrainingTelemetryConfig(
+    perf_tag_or_fn="my_perf_tag",
+    # ... other training config parameters
 )
 
 # Create a sync exporter
 exporter = V1CompatibleExporter(
-    training_telemetry_config=config,
+    one_logger_config=base_config,
     async_mode=False  # Use sync mode
 )
 
 # Create an async exporter
 exporter = V1CompatibleExporter(
-    training_telemetry_config=config,
+    one_logger_config=base_config,
     async_mode=True  # Use async mode
 )
 
 # Configure the TrainingTelemetryProvider
-TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter.exporter).configure_provider()
+TrainingTelemetryProvider.instance().with_base_config(base_config).with_exporter(exporter.exporter).configure_provider()
+
+on_app_start <- api call
+TrainingTelemetryProvider.instance().set_training_telemetry_config(training_config)
 ```
 
 ### Using configure_v2_adapter (Recommended)
@@ -84,7 +92,7 @@ This is the recommended approach for applications migrating from v1 to v2 as it 
 The `V1CompatibleExporter` automatically creates a `WandBConfig` with v1-compatible settings:
 
 - **entity**: Always set to `"hwinf_dcm"` for internal users
-- **project**: Uses `training_telemetry_config.application_name`
+- **project**: Uses `one_logger_config.application_name`
 - **run_name**: Auto-generated with format `"{application_name}-run-{uuid}"`
 - **host**: Set to `"https://api.wandb.ai"`
 - **api_key**: Empty string (uses anonymous login)
@@ -96,7 +104,7 @@ The `V1CompatibleExporter` automatically creates a `WandBConfig` with v1-compati
 The `V1CompatibleExporter` provides the following properties:
 
 - `exporter`: The underlying exporter instance (`V1CompatibleWandbExporterSync` or `V1CompatibleWandbExporterAsync`)
-- `training_telemetry_config`: The training telemetry configuration
+- `one_logger_config`: The OneLogger configuration
 - `exporter_config`: The automatically created `WandBConfig`
 - `is_async`: Boolean indicating if the exporter is in async mode
 

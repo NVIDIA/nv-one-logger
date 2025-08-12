@@ -12,7 +12,7 @@ There are two approaches to integrate your PyTorch Lightning application with nv
  Using this method, several of the training events will be automatically captured. However, you still need to explicitly call the one logger API for other events. See [explicit vs implicit](#explicit-vs-implicit) section for more details.
 
 ```python
-    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter).configure_provider()
+    TrainingTelemetryProvider.instance().with_base_config(config).with_exporter(exporter).configure_provider()
     ...
     HookedTrainer, nv_one_logger_callback = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
     # Instantiate using "HookedTrainer" passing it the same parameters you would pass to the regular Lightning Trainer.
@@ -45,7 +45,7 @@ Using this method, several of the training events will be automatically captured
 See [Explicit vs Implicit Telemetry Event Collection](#explicit-vs-implicit-telemetry-collection) section for more details.
 
 ```python
-    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter).configure_provider()
+    TrainingTelemetryProvider.instance().with_base_config(config).with_exporter(exporter).configure_provider()
     ....
     trainer = OneLoggerPTLTrainer(
         trainer_config= {
@@ -139,18 +139,22 @@ class SimpleModel(LightningModule):
 
 def main():
     # 1. Configure OneLoggerTrainingTelemetryProvider
-    config = TrainingTelemetryConfig(
+    base_config = OneLoggerConfig(
+        application_name="test_app",
+        session_tag_or_fn="test_session",
+        world_size_or_fn=5,
+    )
+    
+    training_config = TrainingTelemetryConfig(
         world_size_or_fn=5,
         is_log_throughput_enabled_or_fn=True,
         flops_per_sample_or_fn=100,
         global_batch_size_or_fn=32,
         log_every_n_train_iterations=10,
-        application_name="test_app",
         perf_tag_or_fn="test_perf",
-        session_tag_or_fn="test_session",
     )
     exporter = FileExporter(file_path=Path("training_telemetry.json"))
-    TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(exporter).configure_provider()
+    TrainingTelemetryProvider.instance().with_base_config(base_config).with_exporter(exporter).configure_provider()
 
     # 2. Create and hook the Trainer class
     HookedTrainer = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
@@ -160,18 +164,21 @@ def main():
     )
     nv_one_logger_callback = trainer.nv_one_logger_callback
 
-    # 3. Initialize model with OneLogger hooks and timestamps
+    # 3. Set training telemetry config after on_app_start is called
+    TrainingTelemetryProvider.instance().set_training_telemetry_config(training_config)
+    
+    # 4. Initialize model with OneLogger hooks and timestamps
     nv_one_logger_callback.on_model_init_start()
     model = SimpleModel()
     nv_one_logger_callback.on_model_init_end()
 
-    # 4. Load checkpoint if needed
+    # 5. Load checkpoint if needed
     nv_one_logger_callback.on_load_checkpoint_start()
     if os.path.exists("pretrained.ckpt"):
         model = SimpleModel.load_from_checkpoint("pretrained.ckpt")
     nv_one_logger_callback.on_load_checkpoint_end()
 
-    # 5. Create dummy dataset
+    # 6. Create dummy dataset
     nv_one_logger_callback.on_dataloader_init_start()
     train_dataset = torch.utils.data.TensorDataset(
         torch.randn(1000, 10),
@@ -184,10 +191,10 @@ def main():
     )
     nv_one_logger_callback.on_dataloader_init_end()
     
-    # 6. Start training
+    # 7. Start training
     trainer.fit(model, train_loader)
 
-    # 7. End application
+    # 8. End application
     nv_one_logger_callback.on_app_end()
 
 if __name__ == "__main__":

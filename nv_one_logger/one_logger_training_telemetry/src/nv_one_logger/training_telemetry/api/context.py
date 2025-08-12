@@ -9,7 +9,6 @@ from contextlib import contextmanager
 from typing import Callable, Generator, Optional, Union
 
 from nv_one_logger.core.span import Span
-
 from nv_one_logger.training_telemetry.api.callbacks import (
     on_app_end,
     on_app_start,
@@ -266,7 +265,8 @@ def checkpoint_save(global_step: int) -> Generator[Span, None, None]:
     except Exception:
         raise
     else:
-        if TrainingTelemetryProvider.instance().config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
+        training_config = TrainingTelemetryProvider.instance().config.telemetry_config
+        if training_config and training_config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
             on_save_checkpoint_success(global_step)
     finally:
         on_save_checkpoint_end()

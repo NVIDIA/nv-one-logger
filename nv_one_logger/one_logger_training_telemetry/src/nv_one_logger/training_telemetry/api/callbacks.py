@@ -1,19 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for training_recorder.py."""
-from typing import Callable, Optional, Union, cast
+from typing import Callable, Optional, Union
 
+from nv_one_logger.api.config import OneLoggerConfig
 from nv_one_logger.core.exceptions import assert_that
 from nv_one_logger.core.internal.safe_execution import safely_execute
 from nv_one_logger.core.internal.utils import evaluate_value
 from nv_one_logger.core.span import Span
 from nv_one_logger.core.time import TracingTimestamp
-
-from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.training_recorder import TrainingRecorder
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
 
-def _training_telemetry_config() -> TrainingTelemetryConfig:
+def _one_logger_config() -> OneLoggerConfig:
     return TrainingTelemetryProvider.instance().config
 
 
@@ -183,35 +182,29 @@ def on_train_start(
     Returns:
         The span corresponding to the training loop (StandardTrainingJobSpanName.TRAINING_LOOP).
     """
-    conf = _training_telemetry_config()
-    assert_that(conf.training_loop_config is not None, "TrainingLoopConfig.training_loop_config must be set before starting the training loop.")
-    # Needed to silence mypy warnings about training_loop_config being optional.
-    training_loop_config = cast(TrainingLoopConfig, conf.training_loop_config)
+    conf = _one_logger_config()
+    training_conf = conf.telemetry_config
+    assert_that(training_conf is not None, "Training telemetry config must be set before starting the training loop.")
     assert_that(train_iterations_start is not None, "train_iterations_start is required.")  # type: ignore[reportUnnecessaryComparison]
-    global_batch_size = training_loop_config.global_batch_size  # type: ignore[reportOptionalMemberAccess]
-    assert_that(
-        global_batch_size > 0,
-        "global_batch_size is required and must be a positive integer.",
-    )
+
     # Some of the input parameters need a bit of processing (e.g., setting a default for missing values).
-    train_samples_start = train_samples_start if train_samples_start is not None else train_iterations_start * global_batch_size
+    # Note: global_batch_size is now available from the UPDATE_TRAINING_TELEMETRY_CONFIG event posted to the application span
+    train_samples_start = train_samples_start if train_samples_start is not None else train_iterations_start * training_conf.global_batch_size
     train_iterations_target: Optional[int] = None
     train_samples_target: Optional[int] = None
     train_tokens_target: Optional[int] = None
-    if conf.is_log_throughput_enabled:
+    if training_conf.is_log_throughput_enabled:
         # train_iterations_target and train_samples_target must be set either in the config or passed via this callback.
         train_iterations_target = (
-            evaluate_value(train_iterations_target_or_fn) if train_iterations_target_or_fn is not None else training_loop_config.train_iterations_target
+            evaluate_value(train_iterations_target_or_fn) if train_iterations_target_or_fn is not None else training_conf.train_iterations_target
         )
         assert_that(train_iterations_target and train_iterations_target > 0, "train_iterations_target is required and must be a positive integer.")
 
-        train_samples_target = (
-            evaluate_value(train_samples_target_or_fn) if train_samples_target_or_fn is not None else training_loop_config.train_samples_target
-        )
+        train_samples_target = evaluate_value(train_samples_target_or_fn) if train_samples_target_or_fn is not None else training_conf.train_samples_target
         assert_that(train_samples_target is not None and train_samples_target > 0, "train_samples_target is required and must be a positive integer.")
 
-        if training_loop_config.seq_length and train_samples_target:
-            train_tokens_target = training_loop_config.seq_length * train_samples_target
+        if training_conf.seq_length and train_samples_target:
+            train_tokens_target = training_conf.seq_length * train_samples_target
 
     start_time = TracingTimestamp.for_timestamp(timestamp_sec=start_time_msec / 1000.0) if start_time_msec else TracingTimestamp.now()
     return _recorder().on_training_loop_start(

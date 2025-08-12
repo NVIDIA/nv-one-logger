@@ -15,6 +15,7 @@ from overrides import override
 from pytorch_lightning import Callback, Trainer
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 
+# TODO: Remove the async checkpointing support in another MR.
 _augmented_async_checkpoint_io_enabled = False
 if ptl.__version__ >= "1.7.0":
     _augmented_async_checkpoint_io_enabled = True
@@ -72,12 +73,14 @@ class TimeEventCallback(Callback):
     @override
     def on_train_start(self, trainer: ptl.Trainer, pl_module: ptl.LightningModule) -> None:
         """Execute when the train begins."""
-        if self._provider.config.training_loop_config is None:
+        # Get the training config from the provider
+        training_config = self._provider.config.telemetry_config
+        if training_config is None:
             raise OneLoggerError(
-                "'training_loop_config' field of TrainingTelemetryConfig must be set before the start of training. "
-                "See the documentation for TrainingTelemetryProvider.set_training_loop_config for more details."
+                "Training telemetry config must be set before the start of training. "
+                "See the documentation for TrainingTelemetryProvider.set_training_telemetry_config for more details."
             )
-        global_batch_size = self._provider.config.training_loop_config.global_batch_size
+        global_batch_size = training_config.global_batch_size
         on_train_start(train_iterations_start=trainer.global_step, train_samples_start=trainer.global_step * global_batch_size)
 
     @override
@@ -195,8 +198,11 @@ class TimeEventCallback(Callback):
 
         This is meant for when async checkpointing is enabled and the trainer is an instance of OneLoggerPTLTrainer.
         """
+        training_config = self._provider.config.telemetry_config
+        # Note that ASYNC is not supported for PTL, so will remove this in another MR.
         if (
-            self._provider.config.save_checkpoint_strategy == CheckPointStrategy.ASYNC
+            training_config
+            and training_config.save_checkpoint_strategy == CheckPointStrategy.ASYNC
             and hasattr(trainer, "augmented_async_checkpoint_io")
             and trainer.augmented_async_checkpoint_io is not None  # type: ignore[reportUnknownMemberType]
         ):
@@ -289,7 +295,9 @@ def hook_trainer_cls(
     NOTE: Currently, this function only supports sync checkpointing. If you want to use async checkpointing,
     use the 'OneLoggerPTLTrainer' class instead.
     """
-    if training_telemetry_provider.config.save_checkpoint_strategy != CheckPointStrategy.SYNC:
+    # Note that ASYNC is not supported for PTL, so will remove this in another MR.
+    training_config = training_telemetry_provider.config.telemetry_config
+    if training_config and training_config.save_checkpoint_strategy != CheckPointStrategy.SYNC:
         raise OneLoggerError("'hook_trainer_cls()' doesn't support async checkpointing yet. Use 'OneLoggerPTLTrainer' instead.")
     # Create the callback instance if needed
     if telemetry_callback is None:
@@ -353,7 +361,9 @@ class OneLoggerPTLTrainer(Trainer):
         callbacks = [self._nv_one_logger_callback] + trainer_config.get("callbacks", [])
         trainer_config["callbacks"] = callbacks
 
-        self._save_checkpoint_strategy = training_telemetry_provider.config.save_checkpoint_strategy
+        training_config = training_telemetry_provider.config.telemetry_config
+        # We should handle the case where training_config is None. But that ASYNC is not supported for PTL, so will remove this in another MR.
+        self._save_checkpoint_strategy = training_config.save_checkpoint_strategy if training_config else CheckPointStrategy.SYNC
         self.augmented_async_checkpoint_io: Optional[AugmentedAsyncCheckpointIO] = None
         if _augmented_async_checkpoint_io_enabled and self._save_checkpoint_strategy == CheckPointStrategy.ASYNC:
             # set the augmented async checkpoint io plugin (defined in the base Trainer class)

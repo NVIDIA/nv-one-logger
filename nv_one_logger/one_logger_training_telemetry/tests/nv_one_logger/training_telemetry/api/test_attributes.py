@@ -3,8 +3,8 @@
 """Unit tests for the attributes module."""
 
 import pytest
-from nv_one_logger.core.exceptions import OneLoggerError
 
+from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.training_telemetry.api.attributes import (
     CheckpointSaveSpanAttributes,
     OneLoggerInitializationAttributes,
@@ -12,6 +12,7 @@ from nv_one_logger.training_telemetry.api.attributes import (
     TestingMetricsUpdateAttributes,
     TrainingLoopAttributes,
     TrainingMetricsUpdateAttributes,
+    TrainingTelemetryAttributes,
     ValidationMetricsUpdateAttributes,
 )
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
@@ -23,17 +24,9 @@ class TestTrainingLoopAttributes:
     def test_create_with_required_parameters(self) -> None:
         """Test creating TrainingLoopAttributes with only required parameters."""
         attrs = TrainingLoopAttributes.create(
-            perf_tag="test_perf",
-            log_every_n_train_iterations=10,
-            world_size=10,
-            global_batch_size=32,
             train_iterations_start=100,
             train_samples_start=1000,
         )
-        assert attrs.perf_tag == "test_perf"
-        assert attrs.log_every_n_train_iterations == 10
-        assert attrs.world_size == 10
-        assert attrs.global_batch_size == 32
         assert attrs.train_iterations_start == 100
         assert attrs.train_samples_start == 1000
         assert attrs.train_iterations_target is None
@@ -43,17 +36,11 @@ class TestTrainingLoopAttributes:
     def test_create_with_all_parameters(self) -> None:
         """Test creating TrainingLoopAttributes with all parameters."""
         attrs = TrainingLoopAttributes.create(
-            perf_tag="test_perf",
-            log_every_n_train_iterations=10,
-            world_size=10,
-            global_batch_size=32,
             train_iterations_start=100,
             train_samples_start=1000,
             train_iterations_target=1000,
             train_samples_target=10000,
             train_tokens_target=50000,
-            micro_batch_size=1,
-            seq_length=1024,
             completed_floating_point_operations_overall=1000000,
         )
         assert attrs.train_iterations_start == 100
@@ -61,19 +48,13 @@ class TestTrainingLoopAttributes:
         assert attrs.train_iterations_target == 1000
         assert attrs.train_samples_target == 10000
         assert attrs.train_tokens_target == 50000
-        assert attrs.micro_batch_size == 1
-        assert attrs.seq_length == 1024
         assert attrs.completed_floating_point_operations_overall == 1000000
 
     def test_pass_none_for_required_parameter(self) -> None:
         """Test that passing None for a required parameter raises an error."""
-        with pytest.raises(OneLoggerError, match="perf_tag is required"):
+        with pytest.raises(OneLoggerError, match="train_iterations_start is required"):
             TrainingLoopAttributes.create(
-                perf_tag=None,  # type: ignore
-                log_every_n_train_iterations=10,
-                world_size=10,
-                global_batch_size=32,
-                train_iterations_start=100,
+                train_iterations_start=None,  # type: ignore
                 train_samples_start=1000,
             )
 
@@ -147,54 +128,35 @@ class TestOneLoggerInitializationAttributes:
     def test_create_with_required_parameters(self) -> None:
         """Test creating OneLoggerInitializationAttributes with only required parameters."""
         attrs = OneLoggerInitializationAttributes.create(
+            world_size=4,
             one_logger_training_telemetry_version="1.0.0",
             enable_for_current_rank=True,
             session_tag="test_session",
-            app_type="training",
             is_baseline_run=False,
-            is_train_iterations_enabled=True,
-            is_validation_iterations_enabled=True,
-            is_test_iterations_enabled=True,
-            is_save_checkpoint_enabled=True,
-            is_log_throughput_enabled=True,
             summary_data_schema_version="1.0",
             node_name="test_node",
             rank=0,
-            checkpoint_strategy=CheckPointStrategy.SYNC,
         )
         assert attrs.one_logger_training_telemetry_version == "1.0.0"
         assert attrs.enable_for_current_rank is True
         assert attrs.session_tag == "test_session"
-        assert attrs.app_type == "training"
         assert attrs.is_baseline_run is False
-        assert attrs.is_train_iterations_enabled is True
-        assert attrs.is_validation_iterations_enabled is True
-        assert attrs.is_test_iterations_enabled is True
-        assert attrs.is_save_checkpoint_enabled is True
-        assert attrs.is_log_throughput_enabled is True
         assert attrs.summary_data_schema_version == "1.0"
         assert attrs.node_name == "test_node"
         assert attrs.rank == 0
-        assert attrs.checkpoint_strategy == CheckPointStrategy.SYNC
         assert attrs.custom_metadata is None
 
     def test_create_with_optional_parameters(self) -> None:
         """Test creating OneLoggerInitializationAttributes with optional parameters."""
         attrs = OneLoggerInitializationAttributes.create(
+            world_size=4,
             one_logger_training_telemetry_version="1.0.0",
             enable_for_current_rank=True,
             session_tag="test_session",
-            app_type="training",
             is_baseline_run=False,
-            is_train_iterations_enabled=True,
-            is_validation_iterations_enabled=True,
-            is_test_iterations_enabled=True,
-            is_save_checkpoint_enabled=True,
-            is_log_throughput_enabled=True,
             summary_data_schema_version="1.0",
             node_name="test_node",
             rank=0,
-            checkpoint_strategy=CheckPointStrategy.SYNC,
             custom_metadata={"key1": "value1", "key2": "value2"},
         )
         assert attrs.custom_metadata == ["key1:value1", "key2:value2"]
@@ -202,36 +164,24 @@ class TestOneLoggerInitializationAttributes:
     def test_pass_none_for_required_parameters(self) -> None:
         """Test that passing None for any required parameter raises an error."""
         required_params = {
+            "one_logger_training_telemetry_version": "one_logger_training_telemetry_version is required",
             "enable_for_current_rank": "enable_for_current_rank is required",
             "session_tag": "session_tag is required",
-            "app_type": "app_type is required",
             "is_baseline_run": "is_baseline_run is required",
-            "is_train_iterations_enabled": "is_train_iterations_enabled is required",
-            "is_validation_iterations_enabled": "is_validation_iterations_enabled is required",
-            "is_test_iterations_enabled": "is_test_iterations_enabled is required",
-            "is_save_checkpoint_enabled": "is_save_checkpoint_enabled is required",
-            "is_log_throughput_enabled": "is_log_throughput_enabled is required",
             "summary_data_schema_version": "summary_data_schema_version is required",
             "node_name": "node_name is required",
             "rank": "rank is required",
-            "checkpoint_strategy": "checkpoint_strategy is required",
         }
 
         base_params = {
+            "world_size": 4,
             "one_logger_training_telemetry_version": "1.0.0",
             "enable_for_current_rank": True,
             "session_tag": "test_session",
-            "app_type": "training",
             "is_baseline_run": False,
-            "is_train_iterations_enabled": True,
-            "is_validation_iterations_enabled": True,
-            "is_test_iterations_enabled": True,
-            "is_save_checkpoint_enabled": True,
-            "is_log_throughput_enabled": True,
             "summary_data_schema_version": "1.0",
             "node_name": "test_node",
             "rank": 0,
-            "checkpoint_strategy": CheckPointStrategy.SYNC,
         }
 
         for param, error_msg in required_params.items():
@@ -545,3 +495,386 @@ class TestSaveCheckpointSuccessEventAttributes:
             params[param] = None  # type: ignore[assignment]
             with pytest.raises(OneLoggerError, match=error_msg):
                 SaveCheckpointSuccessEventAttributes.create(**params)
+
+
+class TestTrainingTelemetryAttributes:
+    """Test cases for TrainingTelemetryAttributes class."""
+
+    def test_create_with_all_required_fields(self):
+        """Test creating TrainingTelemetryAttributes with all required fields."""
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag="test_perf",
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+        )
+
+        assert attrs.perf_tag == "test_perf"
+        assert attrs.global_batch_size == 64
+        assert attrs.log_every_n_train_iterations == 10
+
+    def test_create_with_all_fields(self):
+        """Test creating TrainingTelemetryAttributes with all fields."""
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag="test_perf",
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+            micro_batch_size=32,
+            seq_length=512,
+            flops_per_sample=1000,
+            train_iterations_target=1000,
+            train_samples_target=100000,
+            checkpoint_strategy=CheckPointStrategy.SYNC,
+            is_train_iterations_enabled=True,
+            is_validation_iterations_enabled=True,
+            is_test_iterations_enabled=True,
+            is_save_checkpoint_enabled=True,
+            is_log_throughput_enabled=True,
+        )
+
+        assert attrs.perf_tag == "test_perf"
+        assert attrs.global_batch_size == 64
+        assert attrs.log_every_n_train_iterations == 10
+        assert attrs.micro_batch_size == 32
+        assert attrs.seq_length == 512
+        assert attrs.flops_per_sample == 1000
+        assert attrs.train_iterations_target == 1000
+        assert attrs.train_samples_target == 100000
+        assert attrs.checkpoint_strategy == CheckPointStrategy.SYNC
+        assert attrs.is_train_iterations_enabled is True
+        assert attrs.is_validation_iterations_enabled is True
+        assert attrs.is_test_iterations_enabled is True
+        assert attrs.is_save_checkpoint_enabled is True
+        assert attrs.is_log_throughput_enabled is True
+
+    def test_create_with_custom_metadata(self):
+        """Test creating TrainingTelemetryAttributes with telemetry metadata."""
+        custom_metadata = {"telemetry_key1": "telemetry_value1"}
+
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag="test_perf",
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+            custom_metadata=custom_metadata,
+        )
+
+        assert attrs.custom_metadata == ["telemetry_key1:telemetry_value1"]
+
+    def test_create_with_perf_tag_list(self):
+        """Test creating TrainingTelemetryAttributes with perf_tag as a list."""
+        perf_tags = ["tag1", "tag2", "tag3"]
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag=perf_tags,
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+        )
+
+        assert attrs.perf_tag == perf_tags
+
+    def test_create_with_optional_fields_none(self):
+        """Test creating TrainingTelemetryAttributes with optional fields as None."""
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag="test_perf",
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+            # All optional fields are None by default
+        )
+
+        # Required fields should be present
+        assert attrs.perf_tag == "test_perf"
+        assert attrs.global_batch_size == 64
+        assert attrs.log_every_n_train_iterations == 10
+
+        # Optional fields should be None
+        assert attrs.micro_batch_size is None
+        assert attrs.seq_length is None
+        assert attrs.flops_per_sample is None
+        assert attrs.train_iterations_target is None
+        assert attrs.train_samples_target is None
+        assert attrs.checkpoint_strategy is None
+        assert attrs.is_train_iterations_enabled is None
+        assert attrs.is_validation_iterations_enabled is None
+        assert attrs.is_test_iterations_enabled is None
+        assert attrs.is_save_checkpoint_enabled is None
+        assert attrs.is_log_throughput_enabled is None
+        assert attrs.custom_metadata is None
+
+    def test_create_missing_required_fields(self):
+        """Test that creating with missing required fields raises errors."""
+        # Test missing perf_tag - this will fail at the method signature level
+        with pytest.raises(TypeError):
+            TrainingTelemetryAttributes.create(
+                global_batch_size=64,
+                log_every_n_train_iterations=10,
+            )
+
+        # Test missing global_batch_size - this will fail at the method signature level
+        with pytest.raises(TypeError):
+            TrainingTelemetryAttributes.create(
+                perf_tag="test_perf",
+                log_every_n_train_iterations=10,
+            )
+
+        # Test missing log_every_n_train_iterations - this will fail at the method signature level
+        with pytest.raises(TypeError):
+            TrainingTelemetryAttributes.create(
+                perf_tag="test_perf",
+                global_batch_size=64,
+            )
+
+    def test_create_with_none_required_fields(self):
+        """Test that creating with None required fields raises errors."""
+        # Test None perf_tag
+        with pytest.raises(OneLoggerError, match="perf_tag is required\\."):
+            TrainingTelemetryAttributes.create(
+                perf_tag=None,  # type: ignore
+                global_batch_size=64,
+                log_every_n_train_iterations=10,
+            )
+
+        # Test None global_batch_size
+        with pytest.raises(OneLoggerError, match="global_batch_size is required\\."):
+            TrainingTelemetryAttributes.create(
+                perf_tag="test_perf",
+                global_batch_size=None,  # type: ignore
+                log_every_n_train_iterations=10,
+            )
+
+        # Test None log_every_n_train_iterations
+        with pytest.raises(OneLoggerError, match="log_every_n_train_iterations is required\\."):
+            TrainingTelemetryAttributes.create(
+                perf_tag="test_perf",
+                global_batch_size=64,
+                log_every_n_train_iterations=None,  # type: ignore
+            )
+
+    def test_property_access_required_fields(self):
+        """Test property access for required fields."""
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag="test_perf",
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+        )
+
+        # Test property access
+        assert attrs.perf_tag == "test_perf"
+        assert attrs.global_batch_size == 64
+        assert attrs.log_every_n_train_iterations == 10
+
+    def test_property_access_optional_fields(self):
+        """Test property access for optional fields."""
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag="test_perf",
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+            micro_batch_size=32,
+            seq_length=512,
+            flops_per_sample=1000,
+            train_iterations_target=1000,
+            train_samples_target=100000,
+            checkpoint_strategy=CheckPointStrategy.SYNC,
+            is_train_iterations_enabled=True,
+            is_validation_iterations_enabled=True,
+            is_test_iterations_enabled=True,
+            is_save_checkpoint_enabled=True,
+            is_log_throughput_enabled=True,
+        )
+
+        # Test property access for optional fields
+        assert attrs.micro_batch_size == 32
+        assert attrs.seq_length == 512
+        assert attrs.flops_per_sample == 1000
+        assert attrs.train_iterations_target == 1000
+        assert attrs.train_samples_target == 100000
+        assert attrs.checkpoint_strategy == CheckPointStrategy.SYNC
+        assert attrs.is_train_iterations_enabled is True
+        assert attrs.is_validation_iterations_enabled is True
+        assert attrs.is_test_iterations_enabled is True
+        assert attrs.is_save_checkpoint_enabled is True
+        assert attrs.is_log_throughput_enabled is True
+
+    def test_property_access_optional_fields_none(self):
+        """Test property access for optional fields when they are None."""
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag="test_perf",
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+        )
+
+        # Test property access for optional fields when None
+        assert attrs.micro_batch_size is None
+        assert attrs.seq_length is None
+        assert attrs.flops_per_sample is None
+        assert attrs.train_iterations_target is None
+        assert attrs.train_samples_target is None
+        assert attrs.checkpoint_strategy is None
+        assert attrs.is_train_iterations_enabled is None
+        assert attrs.is_validation_iterations_enabled is None
+        assert attrs.is_test_iterations_enabled is None
+        assert attrs.is_save_checkpoint_enabled is None
+        assert attrs.is_log_throughput_enabled is None
+
+    def test_checkpoint_strategy_with_save_disabled(self):
+        """Test that checkpoint_strategy is stored even when save_checkpoint_enabled is False."""
+        attrs = TrainingTelemetryAttributes.create(
+            perf_tag="test_perf",
+            global_batch_size=64,
+            log_every_n_train_iterations=10,
+            is_save_checkpoint_enabled=False,
+            checkpoint_strategy=CheckPointStrategy.SYNC,  # This should be stored regardless
+        )
+
+        assert attrs.is_save_checkpoint_enabled is False
+        assert attrs.checkpoint_strategy == CheckPointStrategy.SYNC
+
+
+class TestTrainingLoopAttributesUpdated:
+    """Test cases for the updated TrainingLoopAttributes class."""
+
+    def test_training_loop_attributes_only_contains_loop_specific_fields(self):
+        """Test that TrainingLoopAttributes only contains training-loop-specific fields."""
+        attrs = TrainingLoopAttributes.create(
+            train_iterations_start=100,
+            train_samples_start=1000,
+            train_tokens_target=50000,
+            completed_floating_point_operations_overall=1000000,
+            train_iterations_target=1000,
+            train_samples_target=10000,
+        )
+
+        # Verify only training-loop-specific fields are present
+        assert attrs.train_iterations_start == 100
+        assert attrs.train_samples_start == 1000
+        assert attrs.train_tokens_target == 50000
+        assert attrs.completed_floating_point_operations_overall == 1000000
+        assert attrs.train_iterations_target == 1000
+        assert attrs.train_samples_target == 10000
+
+        # Verify that training configuration fields are NOT present
+        # These should now be in TrainingTelemetryAttributes
+        assert not hasattr(attrs, "perf_tag")
+        assert not hasattr(attrs, "world_size")
+        assert not hasattr(attrs, "global_batch_size")
+        assert not hasattr(attrs, "log_every_n_train_iterations")
+        assert not hasattr(attrs, "micro_batch_size")
+        assert not hasattr(attrs, "seq_length")
+        assert not hasattr(attrs, "checkpoint_strategy")
+        assert not hasattr(attrs, "is_train_iterations_enabled")
+        assert not hasattr(attrs, "is_validation_iterations_enabled")
+        assert not hasattr(attrs, "is_test_iterations_enabled")
+        assert not hasattr(attrs, "is_save_checkpoint_enabled")
+        assert not hasattr(attrs, "is_log_throughput_enabled")
+
+    def test_training_loop_attributes_with_optional_fields_none(self):
+        """Test TrainingLoopAttributes with optional fields as None."""
+        attrs = TrainingLoopAttributes.create(
+            train_iterations_start=100,
+            train_samples_start=1000,
+            # All optional fields are None by default
+        )
+
+        # Required fields should be present
+        assert attrs.train_iterations_start == 100
+        assert attrs.train_samples_start == 1000
+
+        # Optional fields should be None
+        assert attrs.train_tokens_target is None
+        assert attrs.completed_floating_point_operations_overall is None
+        assert attrs.train_iterations_target is None
+        assert attrs.train_samples_target is None
+
+    def test_training_loop_attributes_property_access(self):
+        """Test property access for TrainingLoopAttributes."""
+        attrs = TrainingLoopAttributes.create(
+            train_iterations_start=100,
+            train_samples_start=1000,
+            train_tokens_target=50000,
+            completed_floating_point_operations_overall=1000000,
+            train_iterations_target=1000,
+            train_samples_target=10000,
+        )
+
+        # Test property access
+        assert attrs.train_iterations_start == 100
+        assert attrs.train_samples_start == 1000
+        assert attrs.train_tokens_target == 50000
+        assert attrs.completed_floating_point_operations_overall == 1000000
+        assert attrs.train_iterations_target == 1000
+        assert attrs.train_samples_target == 10000
+
+
+class TestOneLoggerInitializationAttributesUpdated:
+    """Test cases for the updated OneLoggerInitializationAttributes class."""
+
+    def test_one_logger_initialization_attributes_only_contains_base_fields(self):
+        """Test that OneLoggerInitializationAttributes only contains base config fields."""
+        attrs = OneLoggerInitializationAttributes.create(
+            world_size=4,
+            one_logger_training_telemetry_version="2.1.0",
+            enable_for_current_rank=True,
+            session_tag="test_session",
+            is_baseline_run=False,
+            summary_data_schema_version="1.0",
+            rank=0,
+            node_name="test_node",
+            custom_metadata={"key": "value"},
+        )
+
+        # Verify only base config fields are present
+        assert attrs.one_logger_training_telemetry_version == "2.1.0"
+        assert attrs.enable_for_current_rank is True
+        assert attrs.session_tag == "test_session"
+        assert attrs.is_baseline_run is False
+        assert attrs.summary_data_schema_version == "1.0"
+        assert attrs.rank == 0
+        assert attrs.node_name == "test_node"
+        assert attrs.custom_metadata == ["key:value"]
+
+        # Verify that training-specific fields are NOT present
+        # These should now be in TrainingTelemetryAttributes
+        assert not hasattr(attrs, "is_train_iterations_enabled")
+        assert not hasattr(attrs, "is_validation_iterations_enabled")
+        assert not hasattr(attrs, "is_test_iterations_enabled")
+        assert not hasattr(attrs, "is_save_checkpoint_enabled")
+        assert not hasattr(attrs, "is_log_throughput_enabled")
+        assert not hasattr(attrs, "checkpoint_strategy")
+
+    def test_one_logger_initialization_attributes_without_custom_metadata(self):
+        """Test OneLoggerInitializationAttributes without custom_metadata."""
+        attrs = OneLoggerInitializationAttributes.create(
+            world_size=4,
+            one_logger_training_telemetry_version="2.1.0",
+            enable_for_current_rank=True,
+            session_tag="test_session",
+            is_baseline_run=False,
+            summary_data_schema_version="1.0",
+            rank=0,
+            node_name="test_node",
+            # custom_metadata not provided
+        )
+
+        # Verify custom_metadata is None
+        assert attrs.custom_metadata is None
+
+    def test_one_logger_initialization_attributes_property_access(self):
+        """Test property access for OneLoggerInitializationAttributes."""
+        attrs = OneLoggerInitializationAttributes.create(
+            world_size=4,
+            one_logger_training_telemetry_version="2.1.0",
+            enable_for_current_rank=True,
+            session_tag="test_session",
+            is_baseline_run=False,
+            summary_data_schema_version="1.0",
+            rank=0,
+            node_name="test_node",
+            custom_metadata={"key1": "value1", "key2": "value2"},
+        )
+
+        # Test property access
+        assert attrs.one_logger_training_telemetry_version == "2.1.0"
+        assert attrs.enable_for_current_rank is True
+        assert attrs.session_tag == "test_session"
+        assert attrs.is_baseline_run is False
+        assert attrs.summary_data_schema_version == "1.0"
+        assert attrs.rank == 0
+        assert attrs.node_name == "test_node"
+        assert attrs.custom_metadata == ["key1:value1", "key2:value2"]

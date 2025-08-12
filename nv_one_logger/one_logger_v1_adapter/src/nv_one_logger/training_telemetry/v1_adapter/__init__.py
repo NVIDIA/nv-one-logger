@@ -21,12 +21,12 @@ from nv_one_logger.training_telemetry.v1_adapter.v1_compatible_wandb_exporter im
 
 def configure_v2_adapter(v1_config: Dict[str, Any]) -> None:
     """Configure the v2 adapter."""
-    training_telemetry_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+    base_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
     exporters: List[Exporter] = []
     # Use V1CompatibleExporter
     v1_compatible_exporter = V1CompatibleExporter(
-        training_telemetry_config=training_telemetry_config,
+        one_logger_config=base_config,
         async_mode=v1_config.get("one_logger_async", True),
     )
     exporters.append(v1_compatible_exporter.exporter)
@@ -35,7 +35,7 @@ def configure_v2_adapter(v1_config: Dict[str, Any]) -> None:
     train_telemetry_provider_instance = TrainingTelemetryProvider.instance()
 
     # Set the base telemetry configuration (only once)
-    train_telemetry_provider_instance = train_telemetry_provider_instance.with_base_telemetry_config(training_telemetry_config)
+    train_telemetry_provider_instance = train_telemetry_provider_instance.with_base_config(base_config)
 
     # Add all exporters
     for exporter in exporters:

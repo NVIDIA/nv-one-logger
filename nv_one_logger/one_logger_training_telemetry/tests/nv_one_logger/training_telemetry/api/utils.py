@@ -11,7 +11,6 @@ from nv_one_logger.core.event import Event, StandardEventName
 from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.core.span import Span
 from nv_one_logger.core.time import TracingTimestamp
-
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
 
@@ -66,7 +65,8 @@ def assert_exporter_method_call_sequence(mock_exporter: MagicMock, expected_call
     call_sequence = [call[0] for call in mock_exporter.mock_calls]
     # Remove magic methods
     call_sequence = list(filter(lambda x: not x.startswith("__"), call_sequence))
-    assert call_sequence == [call.__name__ for call in expected_calls]
+    expected_sequence = [call.__name__ for call in expected_calls]
+    assert call_sequence == expected_sequence
 
 
 def span_from_export_start(mock_exporter: MagicMock, expected_parent: Optional[Span]) -> Span:

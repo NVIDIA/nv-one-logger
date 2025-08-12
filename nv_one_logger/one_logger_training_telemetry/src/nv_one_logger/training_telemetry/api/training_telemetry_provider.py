@@ -2,6 +2,9 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
+from pydantic import ConfigDict
+
+from nv_one_logger.api.config import OneLoggerConfig
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.exceptions import OneLoggerError, assert_that
 from nv_one_logger.core.internal.logging import get_logger
@@ -9,9 +12,7 @@ from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.core.span import SpanName
 from nv_one_logger.exporter.exporter import Exporter
 from nv_one_logger.recorder.default_recorder import ExportCustomizationMode
-from pydantic import ConfigDict
-
-from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_recorder import TrainingRecorder
 
@@ -31,8 +32,8 @@ DEFAULT_SPANS_EXPORT_BLACKLIST: List[SpanName] = [
 ]
 
 
-class _ReadOnlyConfig(TrainingTelemetryConfig):
-    """A read-only copy of the TrainingTelemetryConfig."""
+class _ReadOnlyConfig(OneLoggerConfig):
+    """A read-only copy of the OneLoggerConfig."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -80,7 +81,7 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         ...)
     exporter = LoggerExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_base_telemetry_config(config)
+        .with_base_config(config)
         .with_exporter(exporter)
         .configure_provider())
 
@@ -89,7 +90,7 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
     config = TrainingTelemetryConfig(...)
     exporter = LoggerExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_base_telemetry_config(config)
+        .with_base_config(config)
         .with_config_override(
             {
                 "application_name": "test_app",
@@ -105,15 +106,12 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         .with_config_override(
             {
                 "application_name": "test_app",
-                "training_loop_config": {
-                    "world_size_or_fn": 8,
+                "world_size_or_fn": 8,
+                "telemetry_config": {
                     "global_batch_size_or_fn": 64,
                 },
             }
-        .with_config_override(
-                "training_loop_config": {
-                    "world_size_or_fn": 4,
-                },
+        )
         .with_config_override(
             {
                 ....
@@ -126,7 +124,7 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
     exporter1 = LoggerExporter(..)
     exporter2 = OtelExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_base_telemetry_config(config)
+        .with_base_config(config)
         .with_exporter(exporter1)
         .with_exporter(exporter2)
         .configure_provider())
@@ -136,7 +134,7 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
     exporter1 = LoggerExporter(..)
     exporter2 = OtelExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_base_telemetry_config(config)
+        .with_base_config(config)
         .with_exporter(exporter1)
         .with_exporter(exporter2)
         .with_export_customization(export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS, span_name_filter=[...])
@@ -156,18 +154,18 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
 
         self.__fully_configured: bool = False
 
-    def with_base_telemetry_config(self, telemetry_config: TrainingTelemetryConfig) -> "TrainingTelemetryProvider":
-        """Set the base config for the training telemetry.
+    def with_base_config(self, one_logger_config: OneLoggerConfig) -> "TrainingTelemetryProvider":
+        """Set the base config for OneLogger.
 
         Subsequent calls to "with_config_override_xxx" will override fields of the base config.
 
         Note: You can only call this method once.
         """
         if self.__fully_configured:
-            raise OneLoggerError("with_base_telemetry_config can be called only before configure_provider is called.")
+            raise OneLoggerError("with_base_config can be called only before configure_provider is called.")
         if self.__tmp_base_config is not None:
-            raise OneLoggerError("You can only call with_base_telemetry_config once")
-        self.__tmp_base_config = telemetry_config
+            raise OneLoggerError("You can only call with_base_config once")
+        self.__tmp_base_config = one_logger_config
         return self
 
     def with_config_override(self, partial_config: Dict[str, Any]) -> "TrainingTelemetryProvider":
@@ -251,7 +249,7 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         if self.__fully_configured:
             raise OneLoggerError("You can only call configure_provider once per application.")
 
-        config = self._build_telemetry_config()
+        config = self._build_one_logger_config()
         export_customization_mode = ExportCustomizationMode.BLACKLIST_SPANS
         if self.__tmp_export_customization_mode is not None:
             export_customization_mode = self.__tmp_export_customization_mode
@@ -277,13 +275,17 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         if not config.enable_for_current_rank:
             OneLoggerProvider.instance().force_disable_logging()
 
-    def _build_telemetry_config(self) -> TrainingTelemetryConfig:
+    def _build_one_logger_config(self) -> OneLoggerConfig:
         if self.__tmp_base_config is None and not self.__tmp_config_overrides:
             raise OneLoggerError("No configuration was provided. Please provide a base config and/or config overrides.")
+
         merged_config = self.__tmp_base_config.model_dump() if self.__tmp_base_config else {}
         merged_config = self._nested_dict_update(merged_config, self.__tmp_config_overrides)
+        # Convert telemetry_config dictionary to TrainingTelemetryConfig instance if present and not None
+        if "telemetry_config" in merged_config and merged_config["telemetry_config"] is not None:
+            merged_config["telemetry_config"] = TrainingTelemetryConfig(**merged_config["telemetry_config"])
         try:
-            return TrainingTelemetryConfig(**merged_config)
+            return OneLoggerConfig(**merged_config)
         except Exception as e:
             raise OneLoggerError(f"Invalid configuration! Did you forget some required fields? : {e}") from e
 
@@ -317,7 +319,7 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         )
         return cast(TrainingRecorder, recorder)
 
-    def _mutable_config(self) -> TrainingTelemetryConfig:
+    def _mutable_config(self) -> OneLoggerConfig:
         """
         Return the mutable config.
 
@@ -332,15 +334,21 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
             "You need to call TrainingTelemetryProvider.instance().configure() once in your application before accessing the recorder.",
         )
         assert_that(
-            config and isinstance(config, TrainingTelemetryConfig),
-            f"The config returned by TrainingTelemetryProvider.instance().config is not a TrainingTelemetryConfig but was of type {type(config)}.",
+            config and isinstance(config, OneLoggerConfig),
+            f"The config returned by TrainingTelemetryProvider.instance().config is not a OneLoggerConfig but was of type {type(config)}.",
         )
-        return cast(TrainingTelemetryConfig, config)
+        return cast(OneLoggerConfig, config)
 
     @property
-    def config(self) -> TrainingTelemetryConfig:
+    def config(self) -> OneLoggerConfig:
         """Return a read-only copy of the config."""
-        return _ReadOnlyConfig(**self._mutable_config().model_dump())
+        mutable_config = self._mutable_config()
+
+        # Use model_copy() to preserve type information
+        config_copy = mutable_config.model_copy()
+
+        # Return the copy directly - the type information is preserved
+        return config_copy
 
     @property
     def one_logger_ready(self) -> bool:
@@ -355,13 +363,14 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         """Force logging to be disabled effectively disabling onelogger library."""
         OneLoggerProvider.instance().force_disable_logging()
 
-    def set_training_loop_config(self, training_loop_config: TrainingLoopConfig) -> None:
-        """Set the training loop config.
+    def set_training_telemetry_config(self, training_telemetry_config: TrainingTelemetryConfig) -> None:
+        """Set the training telemetry config.
 
-        In some applications, the "training_loop_config" is not known at the time of application start up.
+        In some applications, the training telemetry config is not known at the time of application start up.
         Therefore, we allow leaving it unset and setting it later using this method.
-        Note that the training loop config must be set before the training loop starts.
+        Note that the training telemetry config must be set before the training loop starts.
         """
-        if self._mutable_config().training_loop_config is not None:
-            raise OneLoggerError("Training loop config has already been set.")
-        self._mutable_config().training_loop_config = training_loop_config
+        if self._mutable_config().telemetry_config is not None:
+            raise OneLoggerError("Training telemetry config has already been set.")
+        self._mutable_config().telemetry_config = training_telemetry_config
+        self.recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=training_telemetry_config)

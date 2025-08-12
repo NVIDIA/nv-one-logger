@@ -3,9 +3,10 @@ from typing import Generator, cast
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from nv_one_logger.exporter.exporter import Exporter
 
-from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+from nv_one_logger.api.config import OneLoggerConfig
+from nv_one_logger.exporter.exporter import Exporter
+from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
 from .utils import reset_singletong_providers_for_test
@@ -17,7 +18,16 @@ def configure_provider_for_test(config: TrainingTelemetryConfig, mock_exporter: 
     # Some tests in this module create their own instances of Recorder. Calling this
     # function for those tests interferes with testing the Recorder in isolation.
     reset_singletong_providers_for_test()
-    (TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider())
+
+    # Create a base OneLoggerConfig with the TrainingTelemetryConfig nested inside
+    base_config = OneLoggerConfig(
+        application_name="test_app",
+        session_tag_or_fn="test_session",
+        world_size_or_fn=4,
+        telemetry_config=config,
+    )
+
+    (TrainingTelemetryProvider.instance().with_base_config(base_config).with_exporter(mock_exporter).configure_provider())
 
 
 def reconfigure_provider(config: TrainingTelemetryConfig, mock_exporter: Exporter) -> None:
@@ -46,23 +56,36 @@ def mock_perf_counter() -> Generator[Mock, None, None]:
 def config() -> TrainingTelemetryConfig:
     """Create a configuration for Training Telemetry."""
     config = TrainingTelemetryConfig(
+        perf_tag_or_fn="test_perf",
+        global_batch_size_or_fn=32,
+        flops_per_sample_or_fn=100,
+        log_every_n_train_iterations=10,
+        train_iterations_target_or_fn=100,
+        train_samples_target_or_fn=3200,
+        is_log_throughput_enabled_or_fn=True,
+    )
+    return config
+
+
+@pytest.fixture
+def one_logger_config() -> OneLoggerConfig:
+    """Create a OneLoggerConfig with TrainingTelemetryConfig for testing."""
+    return OneLoggerConfig(
         application_name="test_app",
         session_tag_or_fn="test_session",
-        enable_one_logger=True,
+        is_baseline_run_or_fn=False,
         enable_for_current_rank=True,
-        is_save_checkpoint_enabled_or_fn=True,
-        is_log_throughput_enabled_or_fn=True,
-        training_loop_config=TrainingLoopConfig(
+        world_size_or_fn=4,
+        telemetry_config=TrainingTelemetryConfig(
             perf_tag_or_fn="test_perf",
-            world_size_or_fn=10,
-            flops_per_sample_or_fn=100,
             global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
             log_every_n_train_iterations=10,
             train_iterations_target_or_fn=100,
             train_samples_target_or_fn=3200,
+            is_log_throughput_enabled_or_fn=True,
         ),
     )
-    return config
 
 
 @pytest.fixture
@@ -73,3 +96,11 @@ def mock_exporter() -> Generator[Exporter, None, None]:
     yield exporter
 
     exporter.reset_mock()
+
+
+@pytest.fixture
+def training_telemetry_provider(valid_config, mock_exporter) -> TrainingTelemetryProvider:
+    """Fixture that returns a configured TrainingTelemetryProvider instance."""
+    provider = TrainingTelemetryProvider.instance()
+    provider.with_base_config(valid_config).with_exporter(mock_exporter).configure_provider()
+    return provider

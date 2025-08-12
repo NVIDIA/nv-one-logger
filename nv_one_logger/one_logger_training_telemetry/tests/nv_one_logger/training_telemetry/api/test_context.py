@@ -6,12 +6,13 @@ from typing import Dict
 from unittest.mock import MagicMock, Mock
 
 import pytest
+
+from nv_one_logger.api.config import OneLoggerConfig
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.attributes import Attributes, AttributeValue
 from nv_one_logger.core.event import StandardEventAttributeName
 from nv_one_logger.core.span import StandardSpanAttributeName, StandardSpanName
 from nv_one_logger.exporter.exporter import Exporter
-
 from nv_one_logger.training_telemetry.api.attributes import (
     CheckpointSaveSpanAttributes,
     SaveCheckpointSuccessEventAttributes,
@@ -78,27 +79,29 @@ def test_application_context(mock_exporter: MagicMock, mock_perf_counter: Mock, 
     assert span.attributes == Attributes({StandardSpanAttributeName.DURATION_MSEC: 700000})
 
     event = get_non_trivial_events(span)
-    assert len(event) == 1
+    assert len(event) == 2
     assert event[0].name == StandardTrainingJobEventName.ONE_LOGGER_INITIALIZATION
-    assert mock_exporter.export_event.call_count == 1
+    assert event[1].name == StandardTrainingJobEventName.UPDATE_TRAINING_TELEMETRY_CONFIG
+    assert mock_exporter.export_event.call_count == 2
 
     assert_exporter_method_call_sequence(
         mock_exporter,
         [
             Exporter.initialize,
             Exporter.export_start,
-            Exporter.export_event,
+            Exporter.export_event,  # ONE_LOGGER_INITIALIZATION
+            Exporter.export_event,  # UPDATE_TRAINING_TELEMETRY_CONFIG
             Exporter.export_stop,
             Exporter.close,
         ],
     )
 
 
-def test_training_context(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, config: TrainingTelemetryConfig) -> None:
+def test_training_context(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, one_logger_config: OneLoggerConfig) -> None:
     """Test that the training context manager creates and stops the appropriate spans."""
-    assert config.training_loop_config
+    assert one_logger_config.telemetry_config
     with training_loop(
-        train_iterations_start=0, train_iterations_target_or_fn=1000, train_samples_target_or_fn=1000 * config.training_loop_config.global_batch_size
+        train_iterations_start=0, train_iterations_target_or_fn=1000, train_samples_target_or_fn=1000 * one_logger_config.telemetry_config.global_batch_size
     ) as span:
         advance_time(mock_time, mock_perf_counter, 700.0)
 
@@ -107,10 +110,6 @@ def test_training_context(mock_exporter: MagicMock, mock_perf_counter: Mock, moc
     span = span_from_export_start(mock_exporter, expected_parent=None)
     assert span.name == StandardTrainingJobSpanName.TRAINING_LOOP
     expected_attributes: Dict[str, AttributeValue] = {
-        "perf_tag": "test_perf",
-        "log_every_n_train_iterations": 10,
-        "world_size": 10,
-        "global_batch_size": 32,
         "completed_floating_point_operations_overall": 0,
         "train_iterations_start": 0,
         "train_iterations_target": 1000,
@@ -131,19 +130,23 @@ def test_training_context(mock_exporter: MagicMock, mock_perf_counter: Mock, moc
     )
 
 
-def test_training_iteration_context(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock) -> None:
+def test_training_iteration_context(mock_exporter: MagicMock, mock_perf_counter: Mock, mock_time: Mock, one_logger_config: OneLoggerConfig) -> None:
     """Test that the training iteration context manager creates and stops the appropriate spans."""
-    with training_iteration():
-        advance_time(mock_time, mock_perf_counter, 500.0)
+    # Start a training loop first
+    with training_loop(train_iterations_start=0):
+        with training_iteration():
+            advance_time(mock_time, mock_perf_counter, 500.0)
 
-    # No data is exported for the training iteration span.
-    assert mock_exporter.export_start.call_count == 0
-    assert mock_exporter.export_stop.call_count == 0
+    # Verify that only the training loop span was created (training iteration doesn't export spans)
+    assert mock_exporter.export_start.call_count == 1
+    assert mock_exporter.export_stop.call_count == 1
 
     assert_exporter_method_call_sequence(
         mock_exporter,
         [
             Exporter.initialize,
+            Exporter.export_start,  # Training loop
+            Exporter.export_stop,  # Training loop
         ],
     )
 
@@ -276,7 +279,7 @@ def test_checkpoint_save_context_success(mock_exporter: MagicMock, mock_perf_cou
         productive_train_samples=0,
         productive_train_iterations_sec=0,
         productive_validation_iterations_sec=0,
-        productive_train_tflops=0,
+        productive_train_tflops=None,
         training_start_timestamp_sec=0,
     )
     expected_success_ev_attributes.add(StandardEventAttributeName.TIMESTAMP_MSEC, int((STARTING_TIME + 200) * 1000))
@@ -434,11 +437,11 @@ def test_validation_iteration_context(mock_exporter: MagicMock, mock_perf_counte
     )
 
 
-def test_disabled_for_current_rank(config: TrainingTelemetryConfig, mock_exporter: MagicMock) -> None:
+def test_disabled_for_current_rank(one_logger_config: OneLoggerConfig, mock_exporter: MagicMock) -> None:
     """Test that the training telemetry is disabled for the current rank."""
-    config.enable_for_current_rank = False
+    one_logger_config.enable_for_current_rank = False
     reset_singletong_providers_for_test()
-    (TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(mock_exporter).configure_provider())
+    (TrainingTelemetryProvider.instance().with_base_config(one_logger_config).with_exporter(mock_exporter).configure_provider())
 
     # Try a few context managers to make sure the provider is disabled.
     with application() as app_span:

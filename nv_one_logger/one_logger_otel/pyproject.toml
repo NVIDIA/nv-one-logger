@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nv-one-logger-otel"
-version = "2.0.1"
+version = "2.1.0"
 description = "Extensions to onelogger library to use Open telemetry (OTEL) as a backend."
 authors = ["HWInf-MLWFO <HWInf-MLWFO-E2E-Dev@exchange.nvidia.com>"]
 readme = "README.md"
@@ -14,7 +14,7 @@ StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python req
 opentelemetry-api = "^1.32.1"
 opentelemetry-sdk = "^1.32.1"
 typing-extensions = "^4.13.2"
-nv-one-logger-core = {version = "^2.0.1", source = "mlwfo-staging-pypi"}
+nv-one-logger-core = {path = "../one_logger_core", develop = true}
 
 [build-system]
 requires = ["poetry-core>=1.9.1,<2.0.0", "python-semantic-release>=9.8.3,<10.0"]

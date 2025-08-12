@@ -13,6 +13,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, cast
 
+from nv_one_logger.api.config import OneLoggerConfig
 from nv_one_logger.core.event import ErrorEvent, Event
 from nv_one_logger.core.exceptions import OneLoggerError, assert_that
 from nv_one_logger.core.internal.version import get_version
@@ -24,10 +25,10 @@ from nv_one_logger.training_telemetry.api.attributes import (
     SyncCheckpointMetricsUpdateAttributes,
     TrainingLoopAttributes,
     TrainingMetricsUpdateAttributes,
+    TrainingTelemetryAttributes,
     ValidationMetricsUpdateAttributes,
 )
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
@@ -77,26 +78,26 @@ class V1CompatibleWandbExporterAdapter:
     (e.g., data infra that processes the metrics stored in wandb)
     """
 
-    def __init__(self, training_telemetry_config: TrainingTelemetryConfig) -> None:
-        """Initialize the adapter with a training telemetry configuration.
+    def __init__(self, one_logger_config: OneLoggerConfig) -> None:
+        """Initialize the adapter with a OneLogger configuration.
 
         Args:
-            training_telemetry_config: The corresponding v2 configuration.
+            one_logger_config: The corresponding v2 configuration.
         """
         # Store the initial config for backward compatibility, but prefer getting current config from provider
-        self._initial_training_telemetry_config = training_telemetry_config
+        self._initial_one_logger_config = one_logger_config
 
-    def _get_current_config(self) -> TrainingTelemetryConfig:
-        """Get the current training telemetry config from the provider.
+    def _get_current_config(self) -> OneLoggerConfig:
+        """Get the current onelogger config from the provider.
 
-        Since the config may be set partially at the beginning of the job and the training_loop_config
+        Since the config may be set partially at the beginning of the job and the one logger config
         provided later, we need to get the most recent version of the config each time we want to read the config.
         """
         try:
             return TrainingTelemetryProvider.instance().config
         except Exception:
             # Fallback to initial config if provider is not available
-            return self._initial_training_telemetry_config
+            return self._initial_one_logger_config
 
     def extract_v1_metrics_for_span_start(self, span: Span) -> dict[str, Any]:
         """Extract v1 metrics for a span start event."""
@@ -140,6 +141,7 @@ class V1CompatibleWandbExporterAdapter:
         """Extract v1 metrics for an event."""
         mapping: dict[StandardTrainingJobEventName, Callable[[Event, Span], dict[str, Any]]] = {
             StandardTrainingJobEventName.ONE_LOGGER_INITIALIZATION: self._metrics_for_one_logger_initilzation_event,
+            StandardTrainingJobEventName.UPDATE_TRAINING_TELEMETRY_CONFIG: self._metrics_for_update_training_telemetry_event,
             StandardTrainingJobEventName.TRAINING_METRICS_UPDATE: self._metrics_for_training_metrics_update_event,
             StandardTrainingJobEventName.VALIDATION_METRICS_UPDATE: self._metrics_for_validation_metrics_update_event,
             StandardTrainingJobEventName.SYNC_CHECKPOINT_METRICS_UPDATE: self._metrics_for_sync_checkpoint_metrics_update_event,
@@ -167,16 +169,10 @@ class V1CompatibleWandbExporterAdapter:
         metrics_to_log: dict[str, Any] = _build_metrics(
             [
                 _MetricMapping("app_tag_run_name", attributes.session_tag),
+                _MetricMapping("world_size", attributes.world_size),
                 _MetricMapping("summary_data_schema_version", attributes.summary_data_schema_version),
-                _MetricMapping("app_run_type", attributes.app_type),
                 _MetricMapping("app_metrics_feature_tags", "full"),
                 _MetricMapping("is_baseline_run", attributes.is_baseline_run),
-                _MetricMapping("is_train_iterations_enabled", attributes.is_train_iterations_enabled),
-                _MetricMapping("is_validation_iterations_enabled", attributes.is_validation_iterations_enabled),
-                _MetricMapping("is_test_iterations_enabled", attributes.is_test_iterations_enabled),
-                _MetricMapping("is_save_checkpoint_enabled", attributes.is_save_checkpoint_enabled),
-                _MetricMapping("is_log_throughput_enabled", attributes.is_log_throughput_enabled),
-                _MetricMapping("save_checkpoint_strategy", attributes.checkpoint_strategy if attributes.is_save_checkpoint_enabled else None),
             ]
         )
 
@@ -191,12 +187,48 @@ class V1CompatibleWandbExporterAdapter:
 
         return metrics_to_log
 
-    def _perf_tag_dict(self, config: TrainingTelemetryConfig) -> dict[str, Any]:
+    def _metrics_for_update_training_telemetry_event(self, event: Event, span: Span) -> dict[str, Any]:
+        """Extract v1 metrics for an update training telemetry event."""
         assert_that(
-            config.training_loop_config is not None,
-            "Expected training_loop_config to be non-None",
+            span.name == StandardSpanName.APPLICATION,
+            "Expected span name to be APPLICATION",
         )
-        perf_tag = config.training_loop_config.perf_tag  # type: ignore[report-optional-member-access]
+        assert_that(
+            event.name == StandardTrainingJobEventName.UPDATE_TRAINING_TELEMETRY_CONFIG,
+            "Expected event name to be UPDATE_TRAINING_TELEMETRY_CONFIG",
+        )
+        assert_that(
+            isinstance(event.attributes, TrainingTelemetryAttributes),
+            f"Expected event attributes to be of type 'TrainingTelemetryAttributes' but got {type(event.attributes)}",
+        )
+        attributes = cast(TrainingTelemetryAttributes, event.attributes)
+
+        # Build metrics from training telemetry attributes
+        metrics_to_log: dict[str, Any] = _build_metrics(
+            [
+                _MetricMapping("global_batch_size", attributes.global_batch_size),
+                _MetricMapping("micro_batch_size", attributes.micro_batch_size),
+                _MetricMapping("model_seq_length", attributes.seq_length),
+                _MetricMapping("is_train_iterations_enabled", attributes.is_train_iterations_enabled),
+                _MetricMapping("is_validation_iterations_enabled", attributes.is_validation_iterations_enabled),
+                _MetricMapping("is_test_iterations_enabled", attributes.is_test_iterations_enabled),
+                _MetricMapping("is_save_checkpoint_enabled", attributes.is_save_checkpoint_enabled),
+                _MetricMapping("is_log_throughput_enabled", attributes.is_log_throughput_enabled),
+                _MetricMapping("save_checkpoint_strategy", attributes.checkpoint_strategy if attributes.is_save_checkpoint_enabled else None),
+                _MetricMapping("train_iterations_target", attributes.train_iterations_target),
+                _MetricMapping("train_samples_target", attributes.train_samples_target),
+            ]
+        )
+
+        # Add perf tag metrics
+        metrics_to_log.update(self._perf_tag_dict(self._get_current_config()))
+
+        return metrics_to_log
+
+    def _perf_tag_dict(self, config: OneLoggerConfig) -> dict[str, Any]:
+        if config.telemetry_config is None:
+            raise OneLoggerError("Training telemetry config is not set")
+        perf_tag = config.telemetry_config.perf_tag
         perf_tag_list: list[str] = []
         if type(perf_tag) is list:
             perf_tag_list = perf_tag
@@ -285,22 +317,18 @@ class V1CompatibleWandbExporterAdapter:
         attributes = cast(TrainingLoopAttributes, span.attributes)
         metrics_to_log = _build_metrics(
             [
-                _MetricMapping("world_size", attributes.world_size),
-                _MetricMapping("global_batch_size", attributes.global_batch_size),
                 _MetricMapping("app_train_loop_start_time", span.start_event.timestamp.milliseconds_since_epoch),
                 _MetricMapping("train_tokens_target", attributes.train_tokens_target),
-                _MetricMapping("train_iterations_target", attributes.train_iterations_target),
-                _MetricMapping("train_samples_target", attributes.train_samples_target),
                 _MetricMapping("train_iterations_start", attributes.train_iterations_start),
                 _MetricMapping("train_iterations_end", attributes.train_iterations_start),
                 _MetricMapping("train_samples_start", attributes.train_samples_start),
                 _MetricMapping("train_samples_end", attributes.train_samples_start),
                 _MetricMapping("train_tflop_start", attributes.completed_floating_point_operations_overall, coefficient=1.0 / (10**12)),
-                _MetricMapping("micro_batch_size", attributes.micro_batch_size),
-                _MetricMapping("model_seq_length", attributes.seq_length),
             ]
         )
-        metrics_to_log.update(self._perf_tag_dict(self._get_current_config()))
+        # Note: Training configuration fields (global_batch_size, micro_batch_size,
+        # model_seq_length, is_*_enabled flags, save_checkpoint_strategy, perf_tag, train_iterations_target, train_samples_target)
+        # are now posted via UPDATE_TRAINING_TELEMETRY_CONFIG event and handled by _metrics_for_update_training_telemetry_event
         return metrics_to_log
 
     def _metrics_for_training_loop_stop(self, span: Span) -> dict[str, Any]:
@@ -399,7 +427,7 @@ class V1CompatibleWandbExporterAdapter:
                 _MetricMapping("validation_iterations_time_total_productive", attributes.productive_validation_iterations_sec),
             ]
         )
-        save_checkpoint_strategy = self._get_current_config().save_checkpoint_strategy  # type: ignore[report-optional-member-access]
+        save_checkpoint_strategy = self._get_current_config().telemetry_config.save_checkpoint_strategy if self._get_current_config().telemetry_config else None
         if save_checkpoint_strategy == CheckPointStrategy.SYNC:
             # In v1, we only report the first/last save times for sync checkpoints.
             metrics_to_log.update(
@@ -492,14 +520,14 @@ class V1CompatibleWandbExporterSync(WandBExporterSync):
 
     def __init__(
         self,
-        training_telemetry_config: TrainingTelemetryConfig,
+        one_logger_config: OneLoggerConfig,
         wandb_config: WandBConfig,
     ):
         super().__init__(
             config=wandb_config,
             metric_naming_strategy=HierarchicalMetricNamingStrategy(),
         )
-        self.adapter = V1CompatibleWandbExporterAdapter(training_telemetry_config)
+        self.adapter = V1CompatibleWandbExporterAdapter(one_logger_config)
 
     @override
     def export_start(self, span: Span) -> None:
@@ -534,14 +562,14 @@ class V1CompatibleWandbExporterAsync(WandBExporterAsync):
 
     def __init__(
         self,
-        training_telemetry_config: TrainingTelemetryConfig,
+        one_logger_config: OneLoggerConfig,
         wandb_config: WandBConfig,
     ):
         super().__init__(
             config=wandb_config,
             metric_naming_strategy=HierarchicalMetricNamingStrategy(),
         )
-        self.adapter = V1CompatibleWandbExporterAdapter(training_telemetry_config)
+        self.adapter = V1CompatibleWandbExporterAdapter(one_logger_config)
 
     @override
     def export_start(self, span: Span) -> None:
@@ -574,22 +602,22 @@ class V1CompatibleExporter:
     that can work with either sync or async modes.
     """
 
-    def __init__(self, training_telemetry_config: TrainingTelemetryConfig, async_mode: bool = False):
+    def __init__(self, one_logger_config: OneLoggerConfig, async_mode: bool = False):
         """Initialize the V1CompatibleExporter.
 
         Args:
-            training_telemetry_config: The training telemetry configuration.
+            one_logger_config: The OneLogger configuration.
             async_mode: If True, creates an async exporter. If False, creates a sync exporter.
         """
-        self._training_telemetry_config = training_telemetry_config
+        self._one_logger_config = one_logger_config
         self._async_mode = async_mode
 
         # Create the appropriate exporter config using v1-style configuration
         self._exporter_config = WandBConfig(
             host="https://api.wandb.ai",
             api_key="",
-            project=training_telemetry_config.application_name,
-            run_name=f"{training_telemetry_config.application_name}-run-{str(uuid.uuid4())}",
+            project=one_logger_config.application_name,
+            run_name=f"{one_logger_config.application_name}-run-{str(uuid.uuid4())}",
             entity="hwinf_dcm",  # NOTE: should always be 'hwinf_dcm' for internal user.
             tags=["e2e_metrics_enabled"],
             save_dir="./wandb",
@@ -598,12 +626,12 @@ class V1CompatibleExporter:
         # Create the appropriate exporter based on async mode
         if async_mode:
             self._exporter = V1CompatibleWandbExporterAsync(
-                training_telemetry_config=training_telemetry_config,
+                one_logger_config=one_logger_config,
                 wandb_config=self._exporter_config,
             )
         else:
             self._exporter = V1CompatibleWandbExporterSync(
-                training_telemetry_config=training_telemetry_config,
+                one_logger_config=one_logger_config,
                 wandb_config=self._exporter_config,
             )
 

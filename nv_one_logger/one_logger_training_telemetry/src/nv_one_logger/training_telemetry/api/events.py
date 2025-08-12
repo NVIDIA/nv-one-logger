@@ -15,6 +15,10 @@ class StandardTrainingJobEventName(StrEnum):
     # An event representing the initialization of the OneLogger library. This event is reported as part of the APPLICATION span.
     ONE_LOGGER_INITIALIZATION = "one_logger_initialization"
 
+    # An event representing an update to the training telemetry configuration. This event is reported as part of the APPLICATION span
+    # whenever the training telemetry config is updated or becomes available.
+    UPDATE_TRAINING_TELEMETRY_CONFIG = "update_training_telemetry_config"
+
     # ***********************************************************
     # Predefined events for the TRAINING_LOOP span
     # ###########################################################

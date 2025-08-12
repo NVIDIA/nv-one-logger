@@ -3,9 +3,10 @@
 # pyright: reportPrivateUsage=false
 
 from typing import Set
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
+
 from nv_one_logger.core.event import StandardEventAttributeName, StandardEventName
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.metric_summarizer import MetricSummarizer
@@ -13,7 +14,8 @@ from nv_one_logger.core.internal.multi_window_timer import MultiWindowTimer
 from nv_one_logger.core.span import Span, SpanName, StandardSpanName
 from nv_one_logger.core.time import TracingTimestamp
 from nv_one_logger.exporter.exporter import Exporter
-
+from nv_one_logger.training_telemetry.api.attributes import TrainingTelemetryAttributes
+from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.events import StandardTrainingJobEventName
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
@@ -68,7 +70,7 @@ def test_training_recorder_initialization(training_recorder: TrainingRecorder) -
     state = training_recorder._training_state
     assert isinstance(state, _TrainingState)
     assert state.completed_training_iterations_overall == 0
-    assert state.completed_floating_point_operations_overall == 0
+    assert state.completed_floating_point_operations_overall is None  # This field is initialized as None
     assert state.total_flops_current_job == 0
     assert state.train_samples_processed_current_job == 0
     assert state.first_logged_train_iterations_finish_time is None
@@ -116,10 +118,10 @@ def test_training_state(training_recorder: TrainingRecorder, config: TrainingTel
     train_iterations_start = 5
     train_samples_start = 3000
     training_recorder.on_training_loop_start(train_iterations_start=train_iterations_start, train_samples_start=train_samples_start)
-    assert config.training_loop_config is not None
-    world_size = config.training_loop_config.world_size
-    global_batch_size = config.training_loop_config.global_batch_size
-    flops_per_sample = config.training_loop_config.flops_per_sample
+    # These fields are now directly in TrainingTelemetryConfig, not nested under training_loop_config
+    world_size = 4  # Default from conftest
+    global_batch_size = config.global_batch_size
+    flops_per_sample = config.flops_per_sample
 
     expected_state = _TrainingState(
         multi_iteration_timers={
@@ -329,8 +331,8 @@ def test_events_for_typical_training_job(
     config: TrainingTelemetryConfig, training_recorder: TrainingRecorder, mock_perf_counter: Mock, mock_time: Mock
 ) -> None:
     """Tests that the correct metrics events are reported for a typical training job."""
-    assert config.training_loop_config is not None
-    assert config.training_loop_config.log_every_n_train_iterations == 10
+    # These fields are now directly in TrainingTelemetryConfig, not nested under training_loop_config
+    assert config.log_every_n_train_iterations == 10
     num_train_iterations = 90
     checkpoint_interval = 3
     validation_interval = 5
@@ -447,11 +449,12 @@ def test_events_for_typical_training_job(
         if span_names.count(span_name) != freq:
             print(f"Span {span_name} was exported {span_names.count(span_name)} times, expected {freq} times")
         assert span_names.count(span_name) == freq
-    # Nothing outside of the expected span names was exported
+        # Nothing outside of the expected span names was exported
     assert set(span_names) - set(expected_exported_span_names_freq.keys()) == set()
 
     expected_exported_event_names_freq = {
         StandardTrainingJobEventName.ONE_LOGGER_INITIALIZATION: 1,
+        StandardTrainingJobEventName.UPDATE_TRAINING_TELEMETRY_CONFIG: 1,  # This event is generated when setting the config
         StandardTrainingJobEventName.SAVE_CHECKPOINT_SUCCESS: 29,
         StandardTrainingJobEventName.SYNC_CHECKPOINT_METRICS_UPDATE: 29,
         # reporting training metrics every 10 iterations (10, 20, ...80)
@@ -465,6 +468,175 @@ def test_events_for_typical_training_job(
     # Nothing outside of the expected event names was exported
     assert set(event_names) - set(expected_exported_event_names_freq.keys()) == set()
     assert set(event_names) - set(expected_exported_event_names_freq.keys()) == set()
+
+
+class TestTrainingRecorderUpdateApplicationSpanWithTrainingTelemetryConfig:
+    """Test cases for the _update_application_span_with_training_telemetry_config method."""
+
+    def test_update_application_span_with_training_telemetry_config_success(self, training_recorder):
+        """Test successful update of application span with training metrics."""
+        # Setup
+        config = TrainingTelemetryConfig(
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=64,
+            log_every_n_train_iterations=10,
+            micro_batch_size_or_fn=32,
+            seq_length_or_fn=512,
+            flops_per_sample_or_fn=1000,
+            train_iterations_target_or_fn=1000,
+            train_samples_target_or_fn=100000,
+            save_checkpoint_strategy=CheckPointStrategy.SYNC,
+            is_train_iterations_enabled_or_fn=True,
+            is_validation_iterations_enabled_or_fn=True,
+            is_test_iterations_enabled_or_fn=True,
+            is_save_checkpoint_enabled_or_fn=True,
+            is_log_throughput_enabled_or_fn=True,
+        )
+
+        # Create an application span first
+        training_recorder.on_app_start(start_time=TracingTimestamp.now())
+
+        # Mock the event method
+        with patch.object(training_recorder, "event"):
+            # Mock TracingTimestamp.now()
+            mock_timestamp = TracingTimestamp.now()
+            with patch("nv_one_logger.training_telemetry.api.training_recorder.TracingTimestamp.now", return_value=mock_timestamp):
+                # Execute
+                training_recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=config)
+
+    def test_update_application_span_with_no_telemetry_config(self, training_recorder):
+        """Test that method returns early when no telemetry config is set."""
+        # Execute
+        with pytest.raises(OneLoggerError, match="Please set the training telemetry config before calling this method."):
+            training_recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=None)
+
+    def test_update_application_span_with_training_telemetry_config_no_app_span(self, training_recorder):
+        """Test that method raises error when no application span is active."""
+        # Setup
+        config = TrainingTelemetryConfig(
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=64,
+            log_every_n_train_iterations=10,
+        )
+        # Execute and verify - should raise error since no app span is active
+        with pytest.raises(OneLoggerError, match="Cannot update training metrics: Please call on_app_start\\(\\) before calling this method\\."):
+            training_recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=config)
+
+    def test_update_application_span_with_training_telemetry_config_with_throughput_enabled(self, training_recorder):
+        """Test that completed_floating_point_operations_overall is reset when throughput logging is enabled."""
+        # Setup
+        training_recorder._config.telemetry_config = TrainingTelemetryConfig(
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=64,
+            log_every_n_train_iterations=10,
+            is_log_throughput_enabled_or_fn=True,
+            flops_per_sample_or_fn=1000,
+        )
+
+        # Set initial value
+        training_recorder._training_state.completed_floating_point_operations_overall = 1000
+
+        # Create a real application span
+        training_recorder.on_app_start(start_time=TracingTimestamp.now())
+
+        # Execute
+        training_recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=training_recorder._config.telemetry_config)
+
+        # Verify that completed_floating_point_operations_overall was reset
+        assert training_recorder._training_state.completed_floating_point_operations_overall == 0
+
+    def test_update_application_span_with_training_telemetry_config_with_throughput_disabled(self, training_recorder):
+        """Test that completed_floating_point_operations_overall is not reset when throughput logging is disabled."""
+        # Setup
+        training_recorder._config.telemetry_config = TrainingTelemetryConfig(
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=64,
+            log_every_n_train_iterations=10,
+            is_log_throughput_enabled_or_fn=False,
+        )
+
+        # Create a real application span
+        training_recorder.on_app_start(start_time=TracingTimestamp.now())
+
+        # Set initial value AFTER on_app_start (which calls _update_application_span_with_training_telemetry_config)
+        initial_value = 1000
+        training_recorder._training_state.completed_floating_point_operations_overall = initial_value
+
+        # Execute
+        training_recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=training_recorder._config.telemetry_config)
+
+        # Verify that completed_floating_point_operations_overall was not reset
+        assert training_recorder._training_state.completed_floating_point_operations_overall == initial_value
+
+    def test_update_application_span_with_training_telemetry_config_optional_fields(self, training_recorder):
+        """Test that optional fields are handled correctly when None."""
+        # Setup
+        config = TrainingTelemetryConfig(
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=64,
+            log_every_n_train_iterations=10,
+            # All optional fields are None
+        )
+
+        # Create a real application span
+        training_recorder.on_app_start(start_time=TracingTimestamp.now())
+
+        # Mock the event method
+        with patch.object(training_recorder, "event") as mock_event:
+            # Execute
+            training_recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=config)
+
+            # Verify event was created and attributes are correct
+            # The method should have created an UPDATE_TRAINING_TELEMETRY_CONFIG event
+            assert mock_event.called
+
+            # Get the event that was passed to the event method
+            event_call_args = mock_event.call_args
+            assert event_call_args is not None
+            event = event_call_args[0][1]  # Second argument is the event
+            assert event.name == StandardTrainingJobEventName.UPDATE_TRAINING_TELEMETRY_CONFIG
+
+            # Verify attributes
+            assert isinstance(event.attributes, TrainingTelemetryAttributes)
+            attrs = event.attributes
+
+            # Required fields should be present
+            assert attrs.perf_tag == "test_perf"
+            assert attrs.global_batch_size == 64
+            assert attrs.log_every_n_train_iterations == 10
+
+            # Optional fields should have their default values
+            assert attrs.micro_batch_size is None
+            assert attrs.seq_length is None
+            assert attrs.flops_per_sample is None
+            assert attrs.train_iterations_target is None
+            assert attrs.train_samples_target is None
+            assert attrs.checkpoint_strategy == CheckPointStrategy.SYNC  # Default value
+            assert attrs.is_train_iterations_enabled is True  # Default value
+            assert attrs.is_validation_iterations_enabled is True  # Default value
+            assert attrs.is_test_iterations_enabled is True  # Default value
+            assert attrs.is_save_checkpoint_enabled is True  # Default value
+            assert attrs.is_log_throughput_enabled is False  # Default value
+            assert attrs.custom_metadata is None
+
+    def test_update_application_span_with_training_telemetry_config_perf_tag_list(self, training_recorder):
+        """Test that perf_tag as a list is handled correctly."""
+        # Setup
+        perf_tags = ["tag1", "tag2", "tag3"]
+        config = TrainingTelemetryConfig(
+            perf_tag_or_fn=perf_tags,
+            global_batch_size_or_fn=64,
+            log_every_n_train_iterations=10,
+        )
+
+        # Create a real application span
+        training_recorder.on_app_start(start_time=TracingTimestamp.now())
+
+        # Execute
+        training_recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=config)
+
+        # Verify that the method executed without errors
+        # The perf_tag should be handled correctly as a list
 
 
 def test_timer_auto_stop_error_recording(training_recorder: TrainingRecorder, mock_perf_counter: Mock, mock_time: Mock) -> None:
@@ -589,26 +761,18 @@ def test_timer_auto_stop_for_spans(
     # Setup async config if needed
     if config_setup == "async":
         from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-        from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
         from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
         async_config = TrainingTelemetryConfig(
-            application_name="test_app",
-            session_tag_or_fn="test_session",
-            enable_one_logger=True,
-            enable_for_current_rank=True,
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
+            log_every_n_train_iterations=10,
+            train_iterations_target_or_fn=100,
+            train_samples_target_or_fn=3200,
             is_save_checkpoint_enabled_or_fn=True,
             is_log_throughput_enabled_or_fn=True,
             save_checkpoint_strategy=CheckPointStrategy.ASYNC,
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
-                flops_per_sample_or_fn=100,
-                global_batch_size_or_fn=32,
-                log_every_n_train_iterations=10,
-                train_iterations_target_or_fn=100,
-                train_samples_target_or_fn=3200,
-            ),
         )
 
         # Reconfigure the provider with async config
@@ -766,7 +930,7 @@ def test_app_crash_scenario_with_open_spans(training_recorder: TrainingRecorder,
     app_span = training_recorder.on_app_start(start_time=TracingTimestamp.now())
     assert len(training_recorder._spans) == 1
     assert training_recorder._get_active_span(StandardSpanName.APPLICATION) == app_span
-    assert len(app_span.events) == 2  # Start event + initialization event
+    assert len(app_span.events) == 3  # Start event + initialization event + training telemetry config event
     assert app_span.events[0].name == StandardEventName.SPAN_START
 
     # Verify the app span was exported as started
@@ -826,8 +990,8 @@ def test_app_crash_scenario_with_open_spans(training_recorder: TrainingRecorder,
 
     # Step 5: Verify the state of each span
     # All spans should be active (not stopped)
-    # Note: app_span has 2 events (start + initialization), others have 1 (start only)
-    assert len(app_span.events) == 2
+    # Note: app_span has 3 events (start + initialization + training telemetry config), others have 1 (start only)
+    assert len(app_span.events) == 3
     assert app_span.events[0].name == StandardEventName.SPAN_START
     assert app_span.active  # App span is still active
     assert app_span.stop_event is None  # App span has no stop event

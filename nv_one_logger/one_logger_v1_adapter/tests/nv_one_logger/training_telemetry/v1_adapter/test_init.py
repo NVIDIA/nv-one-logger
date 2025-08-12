@@ -7,7 +7,7 @@ for v1 OneLogger configurations. The function:
 1. Converts v1 config to v2 format using ConfigAdapter
 2. Creates appropriate WandB exporters (async/sync based on configuration) using V1CompatibleExporter
 3. Configures TrainingTelemetryProvider using the fluent API:
-   - provider.with_base_telemetry_config(training_config)
+   - provider.with_base_config(training_config)
    - provider.with_exporter(exporter) for each exporter
    - provider.configure_provider()
 
@@ -120,7 +120,7 @@ class TestConfigureV2Adapter:
             call_args = mock_v1_exporter_class.call_args
 
             # Verify the exporter was created with proper config objects
-            assert call_args.kwargs["training_telemetry_config"] is not None
+            assert call_args.kwargs["one_logger_config"] is not None
             assert call_args.kwargs["async_mode"] is True
 
             # Verify real provider was configured
@@ -161,7 +161,7 @@ class TestConfigureV2Adapter:
             call_args = mock_v1_exporter_class.call_args
 
             # Verify the exporter was created with proper config objects
-            assert call_args.kwargs["training_telemetry_config"] is not None
+            assert call_args.kwargs["one_logger_config"] is not None
             assert call_args.kwargs["async_mode"] is False
 
             # Verify real provider was configured
@@ -186,20 +186,20 @@ class TestConfigureV2Adapter:
         }
 
         # Act - Use real ConfigAdapter directly
-        training_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+        one_logger_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
         # Assert - Verify real conversion worked
-        assert training_config is not None
+        assert one_logger_config is not None
         assert wandb_config is not None
 
         # Check that the conversion preserved key values
-        assert training_config.application_name == "real_test_project"
-        assert training_config.session_tag == "real_test_run"
-        assert training_config.training_loop_config is not None
-        assert training_config.training_loop_config.perf_tag == "real_test_tag"
-        assert training_config.training_loop_config.world_size == 4
-        assert training_config.training_loop_config.global_batch_size == 64
-        assert training_config.is_baseline_run is False
+        assert one_logger_config.application_name == "real_test_project"
+        assert one_logger_config.session_tag == "real_test_run"
+        assert one_logger_config.telemetry_config is not None
+        assert one_logger_config.telemetry_config.perf_tag == "real_test_tag"
+        assert one_logger_config.world_size == 4
+        assert one_logger_config.telemetry_config.global_batch_size == 64
+        assert one_logger_config.is_baseline_run is False
 
     def test_configure_v2_adapter_integration_with_real_configs(self):
         """Integration test using real ConfigAdapter with minimal mocking."""
@@ -233,17 +233,17 @@ class TestConfigureV2Adapter:
             call_args = mock_v1_exporter_class.call_args.kwargs
 
             # The configs should be real objects from ConfigAdapter
-            training_config = call_args["training_telemetry_config"]
+            one_logger_config = call_args["one_logger_config"]
 
-            assert training_config.application_name == "integration_test"
-            assert training_config.session_tag == "integration_run"
-            assert training_config.is_baseline_run is True
-            assert training_config.is_train_iterations_enabled is True
-            assert training_config.is_validation_iterations_enabled is False
-            assert training_config.training_loop_config is not None
-            assert training_config.training_loop_config.perf_tag == "integration_tag"
-            assert training_config.training_loop_config.world_size == 2
-            assert training_config.training_loop_config.global_batch_size == 32
+            assert one_logger_config.application_name == "integration_test"
+            assert one_logger_config.session_tag == "integration_run"
+            assert one_logger_config.is_baseline_run is True
+            assert one_logger_config.telemetry_config.is_train_iterations_enabled is True
+            assert one_logger_config.telemetry_config.is_validation_iterations_enabled is False
+            assert one_logger_config.telemetry_config is not None
+            assert one_logger_config.telemetry_config.perf_tag == "integration_tag"
+            assert one_logger_config.world_size == 2
+            assert one_logger_config.telemetry_config.global_batch_size == 32
             assert call_args["async_mode"] is False
 
             # Verify real provider was configured
@@ -321,12 +321,12 @@ class TestConfigureV2Adapter:
             # Assert - verify real config conversion worked with custom metadata
             mock_v1_exporter_class.assert_called_once()
             call_args = mock_v1_exporter_class.call_args.kwargs
-            training_config = call_args["training_telemetry_config"]
+            one_logger_config = call_args["one_logger_config"]
 
             # Verify real ConfigAdapter processed custom metadata
-            assert "custom_key" in training_config.custom_metadata
-            assert training_config.custom_metadata["custom_key"] == "custom_value"
-            assert training_config.custom_metadata["app_tag_run_version"] == "2.0.0"
+            assert "custom_key" in one_logger_config.custom_metadata
+            assert one_logger_config.custom_metadata["custom_key"] == "custom_value"
+            assert one_logger_config.custom_metadata["app_tag_run_version"] == "2.0.0"
 
             # Verify real provider was configured
             provider = TrainingTelemetryProvider.instance()
@@ -434,7 +434,7 @@ class TestConfigureV2Adapter:
         """Test that configure_v2_adapter properly uses the TrainingTelemetryProvider fluent API.
 
         Verifies that configure_v2_adapter correctly calls:
-        1. with_base_telemetry_config() with the converted training config
+        1. with_base_config() with the converted training config
         2. with_exporter() for each exporter
         3. configure_provider() to finalize configuration
         """
@@ -462,7 +462,7 @@ class TestConfigureV2Adapter:
             provider = TrainingTelemetryProvider.instance()
 
             with (
-                patch.object(provider, "with_base_telemetry_config", wraps=provider.with_base_telemetry_config) as spy_with_config,
+                patch.object(provider, "with_base_config", wraps=provider.with_base_config) as spy_with_config,
                 patch.object(provider, "with_exporter", wraps=provider.with_exporter) as spy_with_exporter,
                 patch.object(provider, "configure_provider", wraps=provider.configure_provider) as spy_configure,
             ):
@@ -471,7 +471,7 @@ class TestConfigureV2Adapter:
 
                 # Assert - verify the fluent API was used correctly
 
-                # Should call with_base_telemetry_config with the converted training config
+                # Should call with_base_config with the converted training config
                 spy_with_config.assert_called_once()
                 call_args = spy_with_config.call_args[0][0]  # Get first positional argument
                 assert call_args is not None
@@ -566,18 +566,18 @@ class TestConfigureV2Adapter:
             # Assert
             mock_v1_exporter_class.assert_called_once()
             call_args = mock_v1_exporter_class.call_args.kwargs
-            training_config = call_args["training_telemetry_config"]
+            one_logger_config = call_args["one_logger_config"]
 
             # Verify additional fields were processed correctly by real ConfigAdapter
-            assert training_config.is_test_iterations_enabled is False
-            assert training_config.is_save_checkpoint_enabled is True
-            assert training_config.is_log_throughput_enabled is True
-            assert training_config.training_loop_config is not None
-            assert training_config.training_loop_config.log_every_n_train_iterations == 100
-            assert training_config.training_loop_config.micro_batch_size == 8
-            assert training_config.training_loop_config.flops_per_sample == 1000
-            assert training_config.training_loop_config.train_iterations_target == 10000
-            assert training_config.training_loop_config.train_samples_target == 100000
+            assert one_logger_config.telemetry_config.is_test_iterations_enabled is False
+            assert one_logger_config.telemetry_config.is_save_checkpoint_enabled is True
+            assert one_logger_config.telemetry_config.is_log_throughput_enabled is True
+            assert one_logger_config.telemetry_config is not None
+            assert one_logger_config.telemetry_config.log_every_n_train_iterations == 100
+            assert one_logger_config.telemetry_config.micro_batch_size == 8
+            assert one_logger_config.telemetry_config.flops_per_sample == 1000
+            assert one_logger_config.telemetry_config.train_iterations_target == 10000
+            assert one_logger_config.telemetry_config.train_samples_target == 100000
 
             # Verify real provider was configured
             provider = TrainingTelemetryProvider.instance()
@@ -618,21 +618,21 @@ class TestConfigureV2Adapter:
             # 1. Verify exporter was created with real converted configs
             mock_v1_exporter_class.assert_called_once()
             call_args = mock_v1_exporter_class.call_args.kwargs
-            training_config = call_args["training_telemetry_config"]
+            one_logger_config = call_args["one_logger_config"]
 
             # 2. Verify ConfigAdapter conversion worked correctly
-            assert training_config.application_name == "e2e_test"
-            assert training_config.session_tag == "e2e_run"
-            assert training_config.is_baseline_run is True
-            assert training_config.is_train_iterations_enabled is True
-            assert training_config.is_validation_iterations_enabled is False
-            assert "test_type" in training_config.custom_metadata
-            assert training_config.custom_metadata["test_type"] == "end_to_end"
-            assert training_config.custom_metadata["app_tag_run_version"] == "1.0.0"
-            assert training_config.training_loop_config is not None
-            assert training_config.training_loop_config.perf_tag == "e2e_tag"
-            assert training_config.training_loop_config.world_size == 8
-            assert training_config.training_loop_config.global_batch_size == 256
+            assert one_logger_config.application_name == "e2e_test"
+            assert one_logger_config.session_tag == "e2e_run"
+            assert one_logger_config.is_baseline_run is True
+            assert one_logger_config.telemetry_config.is_train_iterations_enabled is True
+            assert one_logger_config.telemetry_config.is_validation_iterations_enabled is False
+            assert "test_type" in one_logger_config.custom_metadata
+            assert one_logger_config.custom_metadata["test_type"] == "end_to_end"
+            assert one_logger_config.custom_metadata["app_tag_run_version"] == "1.0.0"
+            assert one_logger_config.telemetry_config is not None
+            assert one_logger_config.telemetry_config.perf_tag == "e2e_tag"
+            assert one_logger_config.world_size == 8
+            assert one_logger_config.telemetry_config.global_batch_size == 256
             assert call_args["async_mode"] is True
 
             # 3. Verify provider is fully configured and ready
@@ -643,8 +643,8 @@ class TestConfigureV2Adapter:
             # 4. Verify provider has access to the configuration
             provider_config = provider.config
             assert provider_config.application_name == "e2e_test"
-            assert provider_config.training_loop_config is not None
-            assert provider_config.training_loop_config.world_size == 8
+            assert provider_config.telemetry_config is not None
+            assert provider_config.world_size == 8
 
             # 5. Verify provider has access to the recorder
             recorder = provider.recorder

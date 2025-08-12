@@ -5,10 +5,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, Literal, Optional, Union
 
-from pydantic import BaseModel, model_validator
-from strenum import StrEnum
+from pydantic import BaseModel, ConfigDict, model_validator
 from typing_extensions import Self
 
+from nv_one_logger.api.telemetry_config import TelemetryConfig
 from nv_one_logger.core.attributes import AttributeValue
 from nv_one_logger.core.internal.utils import evaluate_value
 
@@ -46,25 +46,6 @@ class OneLoggerErrorHandlingStrategy(Enum):
     DISABLE_QUIETLY_AND_REPORT_METRIC_ERROR = "disable_quietly_and_report_metric_error"
 
 
-class ApplicationType(StrEnum):
-    """Enum for common application types."""
-
-    # Model Training (can include validation and testing of model)
-    TRAINING = "training"
-
-    # Model Validation (without training)
-    VALIDATION = "validation"
-
-    # Batch Inference (inference on a batch of data)
-    BATCH_INFERENCE = "batch_inference"
-
-    # Online Inference (inference on a single data point)
-    ONLINE_INFERENCE = "online_inference"
-
-    # Data Processing (e.g., ETL, ELT, data ingestion or data transformation pipelines)
-    DATA_PROCESSING = "data_processing"
-
-
 class LoggerConfig(BaseModel):
     """Configuration for how OneLogger logs its messages and errors."""
 
@@ -89,10 +70,27 @@ class LoggerConfig(BaseModel):
 class OneLoggerConfig(BaseModel):
     """Configuration for OneLogger."""
 
+    # Pydantic model configuration to allow arbitrary types in field definitions.
+    # This is necessary because the telemetry_config field uses a Protocol type (TelemetryConfig),
+    # which is a custom type that Pydantic cannot automatically generate a schema for.
+    # By setting arbitrary_types_allowed=True,
+    # we tell Pydantic to accept any type for this field and skip schema validation for it.
+    #
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     # The unique name for application. This name is used to identify the telemetry data related to various executions of
     # the same application in the OneLogger system (over time, across different machines/clusters, and across
     # different versions of the application).
     application_name: str
+
+    # Number of processes participating in the telemetry collection.
+    # This is a fundamental configuration that affects the entire application, not just training telemetry.
+    world_size_or_fn: Union[int, Callable[[], int]]
+
+    @property
+    def world_size(self) -> int:
+        """Number of processes participating in the telemetry collection."""
+        return evaluate_value(self.world_size_or_fn)
 
     # session_tag (or callable to generate the tag). session_tag is used to used to identify jobs that together contribute
     # to the same task. This means the jobs are "logically" part of a single larger job (e.g.,
@@ -107,19 +105,6 @@ class OneLoggerConfig(BaseModel):
             str: The evaluated session tag value.
         """
         return evaluate_value(self.session_tag_or_fn)
-
-    # This is used to classify the type of the application. We recommend using the ApplicationType enum rather than string
-    # when possible to avoid accidental differences due to typos or casing differences.
-    app_type_or_fn: Union[ApplicationType, str, Callable[[], Union[str, ApplicationType]]]
-
-    @property
-    def app_type(self) -> Union[ApplicationType, str]:
-        """Get the application type.
-
-        Returns:
-            Union[ApplicationType, str]: The evaluated application type.
-        """
-        return evaluate_value(self.app_type_or_fn)
 
     # Flag (or callable to return flag) that indicates if this is a baseline run for comparison purposes.
     # A baseline run is a run that is used to set a performance baseline for future runs.
@@ -146,12 +131,27 @@ class OneLoggerConfig(BaseModel):
     # See the enum docstring for more details on each strategy and for our recommendations on how to set this value.
     error_handling_strategy: OneLoggerErrorHandlingStrategy = OneLoggerErrorHandlingStrategy.PROPAGATE_EXCEPTIONS
 
-    # Flag to enable/disable OneLogger. If set to False, the library will not collect any telemetry data
-    # and will act mostly as a no-op (except for a few lines of code that initialize the library and check for this flag).
-    enable_one_logger: bool = True
+    # Whether to enable logging for the current rank in distributed training.
+    # This controls whether OneLogger is enabled for the current process/rank.
+    # In distributed training scenarios, you can set this to False for ranks where you don't want logging.
+    enable_for_current_rank: bool = True
 
     # Configuration for the logger used for logging messages and errors from the telemetry code.
     logger_config: LoggerConfig = LoggerConfig()
+
+    # Version (or callable to return version) of the data schema used for summarizing metrics.
+    # If the schema of the data you collect changes over time, you can use this value to
+    # keep track of which schema version is used for which run.
+    summary_data_schema_version: Union[str, str] = "1.0.0"
+
+    # Telemetry-specific configuration.
+    # This field contains telemetry-specific settings and parameters.
+    # It is optional and can be None if no telemetry is needed.
+    #
+    # Note: This field uses the TelemetryConfig Protocol type, which is why we need
+    # arbitrary_types_allowed=True in the model_config above. The actual value must be
+    # a concrete class that implements the TelemetryConfig protocol interface.
+    telemetry_config: Optional[TelemetryConfig] = None
 
     @model_validator(mode="after")
     def validate_config(self) -> Self:
@@ -159,7 +159,9 @@ class OneLoggerConfig(BaseModel):
 
         This validator ensures that:
         - application_name is not empty
+        - world_size is set to a positive value
         - custom_metadata keys are valid strings (if provided)
+        - telemetry_config implements the TelemetryConfig protocol (if provided)
 
         Returns:
             OneLoggerConfig: The validated configuration.
@@ -169,6 +171,9 @@ class OneLoggerConfig(BaseModel):
         """
         if not self.application_name or not self.application_name.strip():
             raise ValueError("application_name cannot be empty or whitespace-only")
+
+        if self.world_size <= 0:
+            raise ValueError("world_size must be set to a positive value")
 
         if self.custom_metadata is not None:
             for key in self.custom_metadata.keys():

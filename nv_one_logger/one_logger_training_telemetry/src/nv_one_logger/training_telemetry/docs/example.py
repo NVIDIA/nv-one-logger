@@ -12,13 +12,14 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+
+from nv_one_logger.api.config import OneLoggerConfig
 from nv_one_logger.api.timed_span import timed_span
 from nv_one_logger.core.attributes import Attributes
 from nv_one_logger.exporter.file_exporter import FileExporter
-from torch.utils.data import DataLoader, TensorDataset
-
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
-from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.context import application, checkpoint_save, training_iteration, training_loop
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
@@ -33,22 +34,18 @@ dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 num_epochs = 10
 
 # Initialize the telemetry provider with a default configuration
-config = TrainingTelemetryConfig(
-    application_name="test_app",
-    session_tag_or_fn="test_session",
+base_config = OneLoggerConfig(application_name="example_app", world_size_or_fn=5, session_tag_or_fn="example_session")
+
+training_config = TrainingTelemetryConfig(
+    perf_tag_or_fn="test_perf",
+    log_every_n_train_iterations=10,
+    flops_per_sample_or_fn=100,
+    global_batch_size_or_fn=32,
     is_log_throughput_enabled_or_fn=True,
     save_checkpoint_strategy=CheckPointStrategy.SYNC,
-    training_loop_config=TrainingLoopConfig(
-        perf_tag_or_fn="test_perf",
-        log_every_n_train_iterations=10,
-        world_size_or_fn=5,
-        flops_per_sample_or_fn=100,
-        global_batch_size_or_fn=32,
-    ),
 )
-TrainingTelemetryProvider.instance().with_base_telemetry_config(config).with_exporter(
-    FileExporter(file_path=Path("training_telemetry.json"))
-).configure_provider()
+
+TrainingTelemetryProvider.instance().with_base_config(base_config).with_exporter(FileExporter(file_path=Path("training_telemetry.json"))).configure_provider()
 
 
 class SimpleModel(nn.Module):
@@ -67,6 +64,9 @@ class SimpleModel(nn.Module):
 @application()
 def main() -> None:
     """Run the application."""
+    # Set training telemetry config after on_app_start is called
+    TrainingTelemetryProvider.instance().set_training_telemetry_config(training_config)
+
     # Initialize model, loss function and optimizer
     model = SimpleModel()
     criterion = nn.BCELoss()

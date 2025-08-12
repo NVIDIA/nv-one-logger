@@ -87,7 +87,7 @@ class OneLoggerProvider(metaclass=SingletonMeta["OneLoggerProvider"]):
     @property
     def one_logger_enabled(self) -> bool:
         """Check if the one_logger is ready to be used and logging is not forced to be disabled."""
-        return self.one_logger_ready and not self._logging_force_disabled and self.config.enable_one_logger
+        return self.one_logger_ready and not self._logging_force_disabled and self.config.enable_for_current_rank
 
     def force_disable_logging(self) -> None:
         """Force logging to be disabled effectively disabling onelogger library."""

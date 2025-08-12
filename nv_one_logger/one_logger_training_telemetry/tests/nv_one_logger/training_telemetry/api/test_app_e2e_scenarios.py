@@ -13,10 +13,10 @@ from typing import Any, Dict, List
 from unittest.mock import Mock
 
 import pytest
+
 from nv_one_logger.core.event import StandardEventAttributeName
 from nv_one_logger.core.time import TracingTimestamp
 from nv_one_logger.exporter.file_exporter import FileExporter
-
 from nv_one_logger.training_telemetry.api.callbacks import (
     on_app_end,
     on_app_start,
@@ -501,24 +501,17 @@ class TestCrashScenariosWithRealExporter:
     ) -> None:
         """Test that timer data is exported correctly when there are multiple metrics updates."""
         # Create a custom config with smaller log_every_n_train_iterations for testing
-        from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+        from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 
         custom_config = TrainingTelemetryConfig(
-            application_name="test_app",
-            session_tag_or_fn="test_session",
-            enable_one_logger=True,
-            enable_for_current_rank=True,
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
+            log_every_n_train_iterations=5,  # Smaller value to trigger more frequent exports
+            train_iterations_target_or_fn=25,
+            train_samples_target_or_fn=800,
             is_save_checkpoint_enabled_or_fn=True,
             is_log_throughput_enabled_or_fn=True,
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
-                flops_per_sample_or_fn=100,
-                global_batch_size_or_fn=32,
-                log_every_n_train_iterations=5,  # Smaller value to trigger more frequent exports
-                train_iterations_target_or_fn=25,
-                train_samples_target_or_fn=800,
-            ),
         )
 
         # Reconfigure the provider with the custom config
@@ -661,24 +654,17 @@ class TestCrashScenariosWithRealExporter:
     ) -> None:
         """Test that timer data is exported correctly when the application crashes at iteration 7 after the first log interval."""
         # Create a custom config with smaller log_every_n_train_iterations for testing
-        from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+        from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 
         custom_config = TrainingTelemetryConfig(
-            application_name="test_app",
-            session_tag_or_fn="test_session",
-            enable_one_logger=True,
-            enable_for_current_rank=True,
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
+            log_every_n_train_iterations=5,  # Smaller value to trigger more frequent exports
+            train_iterations_target_or_fn=25,
+            train_samples_target_or_fn=800,
             is_save_checkpoint_enabled_or_fn=True,
             is_log_throughput_enabled_or_fn=True,
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
-                flops_per_sample_or_fn=100,
-                global_batch_size_or_fn=32,
-                log_every_n_train_iterations=5,  # Smaller value to trigger more frequent exports
-                train_iterations_target_or_fn=25,
-                train_samples_target_or_fn=800,
-            ),
         )
 
         # Reconfigure the provider with the custom config
@@ -853,24 +839,17 @@ class TestCrashScenariosWithRealExporter:
         mock_time: Mock,
     ) -> None:
         """Test that timer data is exported correctly when crashes."""
-        from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+        from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 
         custom_config = TrainingTelemetryConfig(
-            application_name="test_app",
-            session_tag_or_fn="test_session",
-            enable_one_logger=True,
-            enable_for_current_rank=True,
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
+            log_every_n_train_iterations=5,
+            train_iterations_target_or_fn=25,
+            train_samples_target_or_fn=800,
             is_save_checkpoint_enabled_or_fn=True,
             is_log_throughput_enabled_or_fn=True,
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
-                flops_per_sample_or_fn=100,
-                global_batch_size_or_fn=32,
-                log_every_n_train_iterations=5,  # Smaller value to trigger more frequent exports
-                train_iterations_target_or_fn=25,
-                train_samples_target_or_fn=800,
-            ),
         )
 
         # Reconfigure the provider with the custom config
@@ -1051,24 +1030,15 @@ class TestCrashScenariosWithRealExporter:
     ) -> None:
         """Test that timer data is exported correctly when the application crashes and calls on_app_end as a failure handler."""
         # Create a custom config with smaller log_every_n_train_iterations for testing
-        from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+        from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 
         custom_config = TrainingTelemetryConfig(
-            application_name="test_app",
-            session_tag_or_fn="test_session",
-            enable_one_logger=True,
-            enable_for_current_rank=True,
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
             is_save_checkpoint_enabled_or_fn=True,
             is_log_throughput_enabled_or_fn=True,
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
-                flops_per_sample_or_fn=100,
-                global_batch_size_or_fn=32,
-                log_every_n_train_iterations=5,  # Smaller value to trigger more frequent exports
-                train_iterations_target_or_fn=25,
-                train_samples_target_or_fn=800,
-            ),
+            log_every_n_train_iterations=5,
         )
 
         # Reconfigure the provider with the custom config
@@ -1259,24 +1229,14 @@ class TestCrashScenariosWithRealExporter:
     ) -> None:
         """Test that timer data is exported correctly when the first on_training_single_iteration_end is missing but the second iteration is complete."""
         # Create a custom config with smaller log_every_n_train_iterations for testing
-        from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+        from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 
         custom_config = TrainingTelemetryConfig(
-            application_name="test_app",
-            session_tag_or_fn="test_session",
-            enable_one_logger=True,
-            enable_for_current_rank=True,
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
             is_save_checkpoint_enabled_or_fn=True,
             is_log_throughput_enabled_or_fn=True,
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
-                flops_per_sample_or_fn=100,
-                global_batch_size_or_fn=32,
-                log_every_n_train_iterations=5,
-                train_iterations_target_or_fn=25,
-                train_samples_target_or_fn=800,
-            ),
         )
 
         # Reconfigure the provider with the custom config
@@ -1327,24 +1287,15 @@ class TestCrashScenariosWithRealExporter:
     ) -> None:
         """Test that timer data is exported correctly when the user misses calling on_load_checkpoint_end."""
         # Create a custom config with smaller log_every_n_train_iterations for testing
-        from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+        from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 
         custom_config = TrainingTelemetryConfig(
-            application_name="test_app",
-            session_tag_or_fn="test_session",
-            enable_one_logger=True,
-            enable_for_current_rank=True,
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
             is_save_checkpoint_enabled_or_fn=True,
             is_log_throughput_enabled_or_fn=True,
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
-                flops_per_sample_or_fn=100,
-                global_batch_size_or_fn=32,
-                log_every_n_train_iterations=5,  # Smaller value to trigger more frequent exports
-                train_iterations_target_or_fn=25,
-                train_samples_target_or_fn=800,
-            ),
+            log_every_n_train_iterations=5,
         )
 
         # Reconfigure the provider with the custom config
@@ -1438,24 +1389,14 @@ class TestCrashScenariosWithRealExporter:
     ) -> None:
         """Test that timer data is exported correctly when the user misses calling on_training_single_iteration_end for iteration 1."""
         # Create a custom config with smaller log_every_n_train_iterations for testing
-        from nv_one_logger.training_telemetry.api.config import TrainingLoopConfig, TrainingTelemetryConfig
+        from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 
         custom_config = TrainingTelemetryConfig(
-            application_name="test_app",
-            session_tag_or_fn="test_session",
-            enable_one_logger=True,
-            enable_for_current_rank=True,
+            perf_tag_or_fn="test_perf",
+            global_batch_size_or_fn=32,
+            flops_per_sample_or_fn=100,
             is_save_checkpoint_enabled_or_fn=True,
             is_log_throughput_enabled_or_fn=True,
-            training_loop_config=TrainingLoopConfig(
-                perf_tag_or_fn="test_perf",
-                world_size_or_fn=10,
-                flops_per_sample_or_fn=100,
-                global_batch_size_or_fn=32,
-                log_every_n_train_iterations=5,  # Smaller value to trigger more frequent exports
-                train_iterations_target_or_fn=25,
-                train_samples_target_or_fn=800,
-            ),
         )
 
         # Reconfigure the provider with the custom config

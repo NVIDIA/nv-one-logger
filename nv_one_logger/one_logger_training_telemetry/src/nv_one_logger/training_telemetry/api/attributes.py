@@ -9,7 +9,6 @@ from typing import Dict, List, Optional, Union
 
 from nv_one_logger.core.attributes import Attributes, AttributeValue
 from nv_one_logger.core.exceptions import assert_that
-
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 
 # **********************************************************************************************************************
@@ -23,92 +22,39 @@ class TrainingLoopAttributes(Attributes):
     @classmethod
     def create(
         cls,
-        perf_tag: Union[str, List[str]],
-        log_every_n_train_iterations: int,
-        world_size: int,
-        global_batch_size: int,
         train_iterations_start: int,
         train_samples_start: int,
+        train_tokens_target: Optional[int] = None,
+        completed_floating_point_operations_overall: Optional[int] = None,
         train_iterations_target: Optional[int] = None,
         train_samples_target: Optional[int] = None,
-        train_tokens_target: Optional[int] = None,
-        micro_batch_size: Optional[int] = None,
-        seq_length: Optional[int] = None,
-        completed_floating_point_operations_overall: Optional[int] = None,
     ) -> "TrainingLoopAttributes":
         """Create a TrainingLoopAttributes object.
 
         Args:
-            perf_tag: Used to identify jobs whose performance is expected to be comparable.
-            log_every_n_train_iterations: Frequency of logging, specified as the number of steps between logs.
-            world_size: Number of processes participating in the training.
-            global_batch_size: Global batch size for training.
-            checkpoint_strategy: Strategy used for saving checkpoints.
             train_iterations_start: The starting iteration number / global step(could be non-zero if the job loads a checkpoint and starts from there).
             train_samples_start: The starting sample number (could be non-zero if the job loads a checkpoint and starts from there).
-            train_iterations_target: Target number of training iterations.
-            train_samples_target: Target number of training samples.
-            train_tokens_target: Target numbrer of training tokens.
-            micro_batch_size: Size of each micro-batch in training (if applicable).
-            seq_length: Sequence length of a training sample (if applicable).
+            train_tokens_target: Target number of training tokens.
             completed_floating_point_operations_overall: Number of floating point operations completed
                 as of the beginning of training (non-zero if the job loads a checkpoint and starts from there).
                 None if unknown or unmeasured.
+            train_iterations_target: Target number of training iterations (for backward compatibility).
+            train_samples_target: Target number of training samples (for backward compatibility).
         """
         attributes = cls()
-        assert_that(perf_tag is not None, "perf_tag is required.")
-        assert_that(log_every_n_train_iterations is not None, "log_every_n_train_iterations is required.")
-        assert_that(world_size is not None, "world_size is required.")
-        assert_that(global_batch_size is not None, "global_batch_size is required.")
         assert_that(train_iterations_start is not None, "train_iterations_start is required.")
         assert_that(train_samples_start is not None, "train_samples_start is required.")
-        attributes.add("perf_tag", perf_tag)  # type: ignore[reportArgumentType]
-        attributes.add("log_every_n_train_iterations", log_every_n_train_iterations)
-        attributes.add("world_size", world_size)
-        attributes.add("global_batch_size", global_batch_size)
         attributes.add("train_iterations_start", train_iterations_start)
         attributes.add("train_samples_start", train_samples_start)
+        if train_tokens_target is not None:
+            attributes.add("train_tokens_target", train_tokens_target)
+        if completed_floating_point_operations_overall is not None:
+            attributes.add("completed_floating_point_operations_overall", completed_floating_point_operations_overall)
         if train_iterations_target is not None:
             attributes.add("train_iterations_target", train_iterations_target)
         if train_samples_target is not None:
             attributes.add("train_samples_target", train_samples_target)
-        if train_tokens_target is not None:
-            attributes.add("train_tokens_target", train_tokens_target)
-        if micro_batch_size is not None:
-            attributes.add("micro_batch_size", micro_batch_size)
-        if seq_length is not None:
-            attributes.add("seq_length", seq_length)
-        if completed_floating_point_operations_overall is not None:
-            attributes.add("completed_floating_point_operations_overall", completed_floating_point_operations_overall)
         return attributes
-
-    @property
-    def perf_tag(self) -> Union[str, List[str]]:
-        """Used to identify jobs whose performance is expected to be comparable."""
-        val = self.get_str_value("perf_tag")
-        assert_that(val is not None, "perf_tag is required.")
-        return val  # type: ignore
-
-    @property
-    def log_every_n_train_iterations(self) -> int:
-        """Frequency of logging, specified as the number of steps between logs."""
-        val = self.get_int_value("log_every_n_train_iterations")
-        assert_that(val is not None, "log_every_n_train_iterations is required.")
-        return val  # type: ignore
-
-    @property
-    def world_size(self) -> int:
-        """Number of processes participating in the training."""
-        val = self.get_int_value("world_size")
-        assert_that(val is not None, "world_size is required.")
-        return val  # type: ignore
-
-    @property
-    def global_batch_size(self) -> int:
-        """Global batch size for training."""
-        val = self.get_int_value("global_batch_size")
-        assert_that(val is not None, "global_batch_size is required.")
-        return val  # type: ignore
 
     @property
     def train_iterations_start(self) -> int:
@@ -125,34 +71,24 @@ class TrainingLoopAttributes(Attributes):
         return val  # type: ignore
 
     @property
-    def train_iterations_target(self) -> Optional[int]:
-        """Target number of training iterations."""
-        return self.get_int_value("train_iterations_target")
-
-    @property
-    def train_samples_target(self) -> Optional[int]:
-        """Target number of training samples."""
-        return self.get_int_value("train_samples_target")
-
-    @property
     def train_tokens_target(self) -> Optional[int]:
         """Target number of training tokens."""
         return self.get_int_value("train_tokens_target")
 
     @property
-    def micro_batch_size(self) -> Optional[int]:
-        """Size of each micro-batch in training (if applicable)."""
-        return self.get_int_value("micro_batch_size")
-
-    @property
-    def seq_length(self) -> Optional[int]:
-        """Sequence length of a training sample (if applicable)."""
-        return self.get_int_value("seq_length")
-
-    @property
     def completed_floating_point_operations_overall(self) -> Optional[int]:
         """Number of floating point operations completed as of the beginning of training (non-zero if the job loads a checkpoint and starts from there)."""
         return self.get_int_value("completed_floating_point_operations_overall")
+
+    @property
+    def train_iterations_target(self) -> Optional[int]:
+        """Target number of training iterations (for backward compatibility)."""
+        return self.get_int_value("train_iterations_target")
+
+    @property
+    def train_samples_target(self) -> Optional[int]:
+        """Target number of training samples (for backward compatibility)."""
+        return self.get_int_value("train_samples_target")
 
 
 class CheckpointSaveSpanAttributes(Attributes):
@@ -217,29 +153,23 @@ class OneLoggerInitializationAttributes(Attributes):
     @classmethod
     def create(
         cls,
+        world_size: int,
         one_logger_training_telemetry_version: str,
         enable_for_current_rank: bool,
         session_tag: str,
-        app_type: str,
         is_baseline_run: bool,
-        is_train_iterations_enabled: bool,
-        is_validation_iterations_enabled: bool,
-        is_test_iterations_enabled: bool,
-        is_save_checkpoint_enabled: bool,
-        is_log_throughput_enabled: bool,
         summary_data_schema_version: str,
         node_name: str,
         rank: int,
-        checkpoint_strategy: CheckPointStrategy,
         custom_metadata: Optional[Dict[str, AttributeValue]] = None,
     ) -> "OneLoggerInitializationAttributes":
         """Create a OneLoggerInitializationAttributes object.
 
         Args:
+            world_size: Number of processes participating in the training.
             one_logger_training_telemetry_version: Version of the one-logger-training-telemetry package.
             enable_for_current_rank: Whether to enable logging for the current rank in distributed training.
             session_tag: Used to determine if two runs use the same code, config, and execution environment.
-            app_type: Type of the application run (e.g., training, validation).
             is_baseline_run: Flag that indicates if this is a baseline run for comparison purposes.
             is_train_iterations_enabled: Whether to log training iterations.
             is_validation_iterations_enabled: Whether to log eval/validation iterations.
@@ -254,40 +184,36 @@ class OneLoggerInitializationAttributes(Attributes):
             will be flattened to a string list of the form ["key1:value1", "key2:value2",..."].
         """
         attributes = cls()
+        assert_that(world_size is not None, "world_size is required.")
         assert_that(one_logger_training_telemetry_version is not None, "one_logger_training_telemetry_version is required.")
         assert_that(enable_for_current_rank is not None, "enable_for_current_rank is required.")
         assert_that(session_tag is not None, "session_tag is required.")
-        assert_that(app_type is not None, "app_type is required.")
         assert_that(is_baseline_run is not None, "is_baseline_run is required.")
-        assert_that(is_train_iterations_enabled is not None, "is_train_iterations_enabled is required.")
-        assert_that(is_validation_iterations_enabled is not None, "is_validation_iterations_enabled is required.")
-        assert_that(is_test_iterations_enabled is not None, "is_test_iterations_enabled is required.")
-        assert_that(is_save_checkpoint_enabled is not None, "is_save_checkpoint_enabled is required.")
-        assert_that(is_log_throughput_enabled is not None, "is_log_throughput_enabled is required.")
         assert_that(summary_data_schema_version is not None, "summary_data_schema_version is required.")
         assert_that(node_name is not None, "node_name is required.")
         assert_that(rank is not None, "rank is required.")
-        assert_that(checkpoint_strategy is not None, "checkpoint_strategy is required.")
 
+        attributes.add("world_size", world_size)
         attributes.add("one_logger_training_telemetry_version", one_logger_training_telemetry_version)
         attributes.add("enable_for_current_rank", enable_for_current_rank)
         attributes.add("session_tag", session_tag)
-        attributes.add("app_type", app_type)
         attributes.add("is_baseline_run", is_baseline_run)
-        attributes.add("is_train_iterations_enabled", is_train_iterations_enabled)
-        attributes.add("is_validation_iterations_enabled", is_validation_iterations_enabled)
-        attributes.add("is_test_iterations_enabled", is_test_iterations_enabled)
-        attributes.add("is_save_checkpoint_enabled", is_save_checkpoint_enabled)
-        attributes.add("is_log_throughput_enabled", is_log_throughput_enabled)
         attributes.add("summary_data_schema_version", summary_data_schema_version)
         attributes.add("node_name", node_name)
         attributes.add("rank", rank)
-        attributes.add("checkpoint_strategy", checkpoint_strategy)
+
         if custom_metadata is not None:
             # Flatten custom metadata to comply with the expected type of the `add` method.
             attributes.add("custom_metadata", [f"{k}:{v}" for k, v in custom_metadata.items()])
 
         return attributes
+
+    @property
+    def world_size(self) -> int:
+        """Number of processes participating in the training."""
+        val = self.get_int_value("world_size")
+        assert_that(val is not None, "world_size is required.")
+        return val  # type: ignore
 
     @property
     def one_logger_training_telemetry_version(self) -> str:
@@ -311,52 +237,10 @@ class OneLoggerInitializationAttributes(Attributes):
         return val  # type: ignore
 
     @property
-    def app_type(self) -> str:
-        """Type of the application run (e.g., training, validation)."""
-        val = self.get_str_value("app_type")
-        assert_that(val is not None, "app_type is required.")
-        return val  # type: ignore
-
-    @property
     def is_baseline_run(self) -> bool:
         """Flag that indicates if this is a baseline run for comparison purposes."""
         val = self.get_bool_value("is_baseline_run")
         assert_that(val is not None, "is_baseline_run is required.")
-        return val  # type: ignore
-
-    @property
-    def is_train_iterations_enabled(self) -> bool:
-        """Whether to log training iterations."""
-        val = self.get_bool_value("is_train_iterations_enabled")
-        assert_that(val is not None, "is_train_iterations_enabled is required.")
-        return val  # type: ignore
-
-    @property
-    def is_validation_iterations_enabled(self) -> bool:
-        """Whether to log eval/validation iterations."""
-        val = self.get_bool_value("is_validation_iterations_enabled")
-        assert_that(val is not None, "is_validation_iterations_enabled is required.")
-        return val  # type: ignore
-
-    @property
-    def is_test_iterations_enabled(self) -> bool:
-        """Whether to log test iterations."""
-        val = self.get_bool_value("is_test_iterations_enabled")
-        assert_that(val is not None, "is_test_iterations_enabled is required.")
-        return val  # type: ignore
-
-    @property
-    def is_save_checkpoint_enabled(self) -> bool:
-        """Whether to log metrics related to saving checkpoints."""
-        val = self.get_bool_value("is_save_checkpoint_enabled")
-        assert_that(val is not None, "is_save_checkpoint_enabled is required.")
-        return val  # type: ignore
-
-    @property
-    def is_log_throughput_enabled(self) -> bool:
-        """Whether to log throughput-related metrics."""
-        val = self.get_bool_value("is_log_throughput_enabled")
-        assert_that(val is not None, "is_log_throughput_enabled is required.")
         return val  # type: ignore
 
     @property
@@ -381,15 +265,186 @@ class OneLoggerInitializationAttributes(Attributes):
         return val  # type: ignore
 
     @property
-    def checkpoint_strategy(self) -> CheckPointStrategy:
-        """Strategy used for saving checkpoints."""
-        val = self.get_str_value("checkpoint_strategy")
-        assert_that(val is not None, "checkpoint_strategy is required.")
+    def custom_metadata(self) -> Optional[List[str]]:
+        """Custom metadata to be logged with the training telemetry data."""
+        if "custom_metadata" not in self.keys():
+            return None
+        return self["custom_metadata"].value  # type: ignore[reportReturnType]
+
+
+class TrainingTelemetryAttributes(Attributes):
+    """Attributes for training telemetry configuration that are stored in the application span.
+
+    These attributes contain training configuration parameters (global_batch_size, etc.)
+    that are needed throughout the training process. They can be either obtained during initialization
+    or updated later, and are stored in the application span via the UPDATE_TRAINING_TELEMETRY_CONFIG event,
+    making them available to all child spans including the TRAINING_LOOP span.
+    """
+
+    @classmethod
+    def create(  # noqa: C901
+        cls,
+        perf_tag: Union[str, List[str]],
+        global_batch_size: int,
+        log_every_n_train_iterations: int,
+        micro_batch_size: Optional[int] = None,
+        seq_length: Optional[int] = None,
+        flops_per_sample: Optional[int] = None,
+        train_iterations_target: Optional[int] = None,
+        train_samples_target: Optional[int] = None,
+        checkpoint_strategy: Optional[CheckPointStrategy] = None,
+        is_train_iterations_enabled: Optional[bool] = None,
+        is_validation_iterations_enabled: Optional[bool] = None,
+        is_test_iterations_enabled: Optional[bool] = None,
+        is_save_checkpoint_enabled: Optional[bool] = None,
+        is_log_throughput_enabled: Optional[bool] = None,
+        custom_metadata: Optional[Dict[str, AttributeValue]] = None,
+    ) -> "TrainingTelemetryAttributes":
+        """Create a TrainingTelemetryAttributes object.
+
+        Args:
+            perf_tag: Used to identify jobs whose performance is expected to be comparable.
+            global_batch_size: Global batch size for training.
+            micro_batch_size: Size of each micro-batch in training (if applicable).
+            seq_length: Sequence length of a training sample (if applicable).
+            flops_per_sample: Number of floating point operations per sample.
+            log_every_n_train_iterations: Frequency of logging, specified as the number of steps between logs.
+            train_iterations_target: Target number of training iterations.
+            train_samples_target: Target number of training samples.
+            checkpoint_strategy: Strategy used for saving checkpoints.
+            is_train_iterations_enabled: Whether the application has training iterations.
+            is_validation_iterations_enabled: Whether the application has validation iterations.
+            is_test_iterations_enabled: Whether the application has test iterations.
+            is_save_checkpoint_enabled: Whether the application saves checkpoints.
+            is_log_throughput_enabled: Whether to log throughput-related metrics.
+            custom_metadata: Custom metadata specific to telemetry configuration.
+        """
+        attributes = cls()
+        assert_that(perf_tag is not None, "perf_tag is required.")
+        assert_that(global_batch_size is not None, "global_batch_size is required.")
+        assert_that(log_every_n_train_iterations is not None, "log_every_n_train_iterations is required.")
+
+        attributes.add("perf_tag", perf_tag)  # type: ignore[reportArgumentType]
+        attributes.add("global_batch_size", global_batch_size)
+        attributes.add("log_every_n_train_iterations", log_every_n_train_iterations)
+
+        if micro_batch_size is not None:
+            attributes.add("micro_batch_size", micro_batch_size)
+        if seq_length is not None:
+            attributes.add("seq_length", seq_length)
+        if flops_per_sample is not None:
+            attributes.add("flops_per_sample", flops_per_sample)
+        if train_iterations_target is not None:
+            attributes.add("train_iterations_target", train_iterations_target)
+        if train_samples_target is not None:
+            attributes.add("train_samples_target", train_samples_target)
+        if checkpoint_strategy is not None:
+            attributes.add("checkpoint_strategy", checkpoint_strategy)
+        if is_train_iterations_enabled is not None:
+            attributes.add("is_train_iterations_enabled", is_train_iterations_enabled)
+        if is_validation_iterations_enabled is not None:
+            attributes.add("is_validation_iterations_enabled", is_validation_iterations_enabled)
+        if is_test_iterations_enabled is not None:
+            attributes.add("is_test_iterations_enabled", is_test_iterations_enabled)
+        if is_save_checkpoint_enabled is not None:
+            attributes.add("is_save_checkpoint_enabled", is_save_checkpoint_enabled)
+        if is_log_throughput_enabled is not None:
+            attributes.add("is_log_throughput_enabled", is_log_throughput_enabled)
+
+        if custom_metadata is not None:
+            # Flatten telemetry metadata to comply with the expected type of the `add` method.
+            attributes.add("custom_metadata", [f"{k}:{v}" for k, v in custom_metadata.items()])
+
+        return attributes
+
+    @property
+    def perf_tag(self) -> Union[str, List[str]]:
+        """Used to identify jobs whose performance is expected to be comparable."""
+        if "perf_tag" not in self.keys():
+            return None  # type: ignore
+        val = self["perf_tag"].value
+        assert_that(val is not None, "perf_tag is required.")
+        assert_that(isinstance(val, (str, list)), f"perf_tag must be a string or list. Got {type(val)}.")
         return val  # type: ignore
 
     @property
+    def global_batch_size(self) -> int:
+        """Global batch size for training."""
+        val = self.get_int_value("global_batch_size")
+        assert_that(val is not None, "global_batch_size is required.")
+        return val  # type: ignore
+
+    @property
+    def log_every_n_train_iterations(self) -> int:
+        """Frequency of logging, specified as the number of steps between logs."""
+        val = self.get_int_value("log_every_n_train_iterations")
+        assert_that(val is not None, "log_every_n_train_iterations is required.")
+        return val  # type: ignore
+
+    @property
+    def app_type(self) -> str:
+        """Type of the application run (e.g., training, validation)."""
+        return self.get_str_value("app_type")
+
+    @property
+    def micro_batch_size(self) -> Optional[int]:
+        """Size of each micro-batch in training (if applicable)."""
+        return self.get_int_value("micro_batch_size")
+
+    @property
+    def seq_length(self) -> Optional[int]:
+        """Sequence length of a training sample (if applicable)."""
+        return self.get_int_value("seq_length")
+
+    @property
+    def flops_per_sample(self) -> Optional[int]:
+        """Number of floating point operations per sample."""
+        return self.get_int_value("flops_per_sample")
+
+    @property
+    def train_iterations_target(self) -> Optional[int]:
+        """Target number of training iterations."""
+        return self.get_int_value("train_iterations_target")
+
+    @property
+    def train_samples_target(self) -> Optional[int]:
+        """Target number of training samples."""
+        return self.get_int_value("train_samples_target")
+
+    @property
+    def checkpoint_strategy(self) -> Optional[CheckPointStrategy]:
+        """Strategy used for saving checkpoints."""
+        val = self.get_str_value("checkpoint_strategy")
+        return CheckPointStrategy(val) if val is not None else None
+
+    @property
+    def is_train_iterations_enabled(self) -> Optional[bool]:
+        """Whether to log training iterations."""
+        return self.get_bool_value("is_train_iterations_enabled")
+
+    @property
+    def is_validation_iterations_enabled(self) -> Optional[bool]:
+        """Whether to log eval/validation iterations."""
+        return self.get_bool_value("is_validation_iterations_enabled")
+
+    @property
+    def is_test_iterations_enabled(self) -> Optional[bool]:
+        """Whether to log test iterations."""
+        return self.get_bool_value("is_test_iterations_enabled")
+
+    @property
+    def is_save_checkpoint_enabled(self) -> Optional[bool]:
+        """Whether to log metrics related to saving checkpoints."""
+        return self.get_bool_value("is_save_checkpoint_enabled")
+
+    @property
+    def is_log_throughput_enabled(self) -> Optional[bool]:
+        """Whether to log throughput-related metrics."""
+        return self.get_bool_value("is_log_throughput_enabled")
+
+    @property
     def custom_metadata(self) -> Optional[List[str]]:
-        """Custom metadata to be logged with the training telemetry data."""
+        """Custom metadata specific to telemetry configuration."""
         if "custom_metadata" not in self.keys():
             return None
         return self["custom_metadata"].value  # type: ignore[reportReturnType]

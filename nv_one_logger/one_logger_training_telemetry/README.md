@@ -215,22 +215,33 @@ def main() -> None:
                     ....
 
 # Initialize the telemetry provider with a default configuration
-config = TrainingTelemetryConfig(
+base_config = OneLoggerConfig(
+    application_name="test_app",
+    session_tag_or_fn="test_session",
+    world_size_or_fn=5,
+)
+
+training_config = TrainingTelemetryConfig(
     world_size_or_fn=5,
     is_log_throughput_enabled_or_fn=True,
     flops_per_sample_or_fn=100,
     global_batch_size_or_fn=32,
     log_every_n_train_iterations=10,
-    application_name="test_app",
     perf_tag_or_fn="test_perf",
-    session_tag_or_fn="test_session",
 )
 
 # configure the telemetry library and start the main() function
-(TrainingTelemetryBuilder()
-    .with_base_telemetry_config(config)
+(TrainingTelemetryProvider.instance()
+    .with_base_config(base_config)
     .with_exporter(FileExporter(file_path=Path("training_telemetry.json")))
     .configure_provider())
+
+@application()
+def main() -> None:
+    # Set training telemetry config after on_app_start is called
+    TrainingTelemetryProvider.instance().set_training_telemetry_config(training_config)
+    # ... rest of your training code
+
 main()
 ```
 
@@ -246,12 +257,15 @@ Here is a simplified example:
 
 def main() -> None:
     # configure the telemetry library and start the main() function
-  (TrainingTelemetryBuilder()
-      .with_base_telemetry_config(config)
+  (TrainingTelemetryProvider.instance()
+      .with_base_config(base_config)
       .with_exporter(FileExporter(file_path=Path("training_telemetry.json")))
       .configure_provider())
 
     on_app_start() # < ---- callback
+    
+    # Set training telemetry config after on_app_start is called
+    TrainingTelemetryProvider.instance().set_training_telemetry_config(training_config)
 
     ....
 
@@ -281,22 +295,20 @@ have full access to the core API. Specifically,
 ```python
 def main() -> None:
     # configure the telemetry library and start the main() function
-    (TrainingTelemetryBuilder()
-        .with_base_telemetry_config(config)
+    (TrainingTelemetryProvider.instance()
+        .with_base_config(base_config)
         .with_exporter(FileExporter(file_path=Path("training_telemetry.json")))
         # If you are creating custom spans, make sure you set the export_customization_mode and span_name_filter
         # such that such spans are exported.
         .with_export_customization(export_customization_mode=ExportCustomizationMode.xxxx, 
                                    span_name_filter=[...])
         .configure_provider())
-    TrainingTelemetryProvider.instance().configure(
-        config=config, 
-        exporters=[],
-)
 
-    ....
+    with application() as app_span: # <---- start application span
+        # Set training telemetry config after on_app_start is called
+        TrainingTelemetryProvider.instance().set_training_telemetry_config(training_config)
 
-    with training_loop(train_iterations_start=0) as span: # <---- access the span created by the context manager
+        with training_loop(train_iterations_start=0) as span: # <---- access the span created by the context manager
         ...
         training_span.add_attribute("my_custom_attribute", "my_custom_value") # <--- Adding custom attributes
 
@@ -326,25 +338,24 @@ for a list of predefined spans/events/attributes). You may need to define custom
 
 ## Configuration
 
-### Lazy initialization of training loop config
+### Lazy initialization of training telemetry config
 
-`TrainingTelemetryConfig` encapsulates both  configuration knobs for telemetry and some data about the training job that is needed for telemetry. The user is expected to provide the config
+`TrainingTelemetryConfig` encapsulates both configuration knobs for telemetry and some data about the training job that is needed for telemetry. The user is expected to provide the config
 on the job start up. Since some of the training job properties may not be known at the job start time (e.g., the batch size may be determined only after initializing the data reader), a subset
-of config parameters can be provided after the job start up: namely, the fields in `training_loop_config` can be set after the job start time and before the start of the training loop using\
-`set_training_loop_config`:
+of config parameters can be provided after the job start up using `set_training_telemetry_config`:
 
 ```python
 # at the start of the job
-TrainingTelemetryProvider.instance().with_base_telemetry_config(config_without_training_loop).with_exporter(exporter).configure_provider()
+TrainingTelemetryProvider.instance().with_base_config(base_config).with_exporter(exporter).configure_provider()
 
 # ....
 
-training_loop_config = TrainingLoopConfig(
+training_config = TrainingTelemetryConfig(
     perf_tag_or_fn="new_perf_tag",
     world_size_or_fn=8,
     global_batch_size_or_fn=64,
 )
-TrainingTelemetryProvider.instance().set_training_loop_config(training_loop_config)
+TrainingTelemetryProvider.instance().set_training_telemetry_config(training_config)
 # start of the training loop 
 ```
 

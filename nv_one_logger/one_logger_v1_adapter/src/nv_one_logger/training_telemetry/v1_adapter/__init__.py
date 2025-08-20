@@ -5,41 +5,25 @@ the telemetry data.
 
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from nv_one_logger.exporter.exporter import Exporter
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
 from nv_one_logger.training_telemetry.v1_adapter.config_adapter import ConfigAdapter
-from nv_one_logger.training_telemetry.v1_adapter.v1_compatible_wandb_exporter import (
-    V1CompatibleExporter,
-    V1CompatibleWandbExporterAdapter,
-    V1CompatibleWandbExporterAsync,
-    V1CompatibleWandbExporterSync,
-)
+from nv_one_logger.training_telemetry.v1_adapter.v1_compatible_wandb_exporter import V1CompatibleExporter
 
 
 def configure_v2_adapter(v1_config: Dict[str, Any]) -> None:
     """Configure the v2 adapter."""
-    base_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
-
-    exporters: List[Exporter] = []
-    # Use V1CompatibleExporter
-    v1_compatible_exporter = V1CompatibleExporter(
-        one_logger_config=base_config,
-        async_mode=v1_config.get("one_logger_async", True),
-    )
-    exporters.append(v1_compatible_exporter.exporter)
+    one_logger_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
     # Configure the TrainingTelemetryProvider using the fluent API
     train_telemetry_provider_instance = TrainingTelemetryProvider.instance()
 
-    # Set the base telemetry configuration (only once)
-    train_telemetry_provider_instance = train_telemetry_provider_instance.with_base_config(base_config)
-
-    # Add all exporters
-    for exporter in exporters:
-        train_telemetry_provider_instance = train_telemetry_provider_instance.with_exporter(exporter)
+    # Set the base telemetry configuration and auto-discover exporters
+    train_telemetry_provider_instance = train_telemetry_provider_instance.with_base_config(
+        one_logger_config
+    ).with_export_config()  # Auto-discover and configure exporters
 
     # Configure the provider to make it ready for use
     train_telemetry_provider_instance.configure_provider()
@@ -48,8 +32,5 @@ def configure_v2_adapter(v1_config: Dict[str, Any]) -> None:
 __all__ = [
     "ConfigAdapter",
     "V1CompatibleExporter",
-    "V1CompatibleWandbExporterAdapter",
-    "V1CompatibleWandbExporterAsync",
-    "V1CompatibleWandbExporterSync",
     "configure_v2_adapter",
 ]

@@ -96,6 +96,16 @@ def some_func():
 
 - You can also bypass the `Recorder` interface and `timed_span` and directly instantiate one of more `Exporter`s and use them to export spans and events you have created using the classes under `one_logger.core`. Try to avoid this approach unless really necessary. Using a `Recorder` is preferred as it reduces the chance of making mistakes.
 
+## Exporter Configuration System
+
+One Logger provides a flexible exporter configuration system that allows you to configure exporters through multiple sources with clear priority rules. This system supports:
+
+- **Direct configuration** in code using lists of dictionaries (highest priority)
+- **Configuration files** (YAML/JSON) (medium priority)
+- **Package-provided configurations** via Python entry points (lowest priority)
+
+**Priority Order**: Direct configuration completely overrides file configuration, which completely replaces package configuration. For detailed information on how to use the exporter configuration system, see the [Exporter Configuration Guide](src/nv_one_logger/core/exporter/README.md).
+
 ## Design Considerations
 
 While we could have used Python classes defined in the OpenTelemetry API (such as Span, Attribute, etc.) instead of creating our own classes, this would force any application using our core library to depend on both the OpenTelemetry API and SDK (the latter is needed in the bootstrap code that creates a provider object for creation of spans). This dependency requirement could potentially conflict with the application's existing dependencies or create unnecessary constraints (e.g., when an application already depends on a different version of OpenTelemetry SDK for its own instrumentation needs. A similar problem can happen with conflicting transitive dependencies).

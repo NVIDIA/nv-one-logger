@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from pydantic import ConfigDict
 
@@ -10,7 +10,9 @@ from nv_one_logger.core.exceptions import OneLoggerError, assert_that
 from nv_one_logger.core.internal.logging import get_logger
 from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.core.span import SpanName
+from nv_one_logger.exporter.export_config_manager import ExporterConfigManager
 from nv_one_logger.exporter.exporter import Exporter
+from nv_one_logger.exporter.exporter_config import ExporterConfig
 from nv_one_logger.recorder.default_recorder import ExportCustomizationMode
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
@@ -54,18 +56,18 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
     This singleton needs to be configured once per process as follows on application start up:
     Example usage:
     ```python
-        config = TrainingTelemetryConfig(....) # You can use a factory that takes a json or other representation of
-        the configs and creates a TrainingTelemetryConfig object.
-        TrainingTelemetryProvider.instance().configure(config=config, exporters=[...])
+            config = TrainingTelemetryConfig(....) # You can use a factory that takes a json or other representation of
+            the configs and creates a TrainingTelemetryConfig object.
+            TrainingTelemetryProvider.instance().configure(config=config, exporters=[...])
     ```
 
     Once configured, the application can use the singleton:
     ```python
-        # In other parts of the application
-        with TrainingTelemetryProvider.instance().recorder.start("my_span"):
-            ... # code here will be considered part of the span and will be timed/recorded.
+            # In other parts of the application
+            with TrainingTelemetryProvider.instance().recorder.start("my_span"):
+                    ... # code here will be considered part of the span and will be timed/recorded.
 
-        or use timed_span context manager.
+            or use timed_span context manager.
     ```
 
     Note that the following assumptions are valid:
@@ -76,69 +78,69 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
     ```python
     # Example 1: Use a TrainingTelemetryConfig object to configure the training telemetry.
     config = TrainingTelemetryConfig(
-        application_name="test_app",
-        session_tag_or_fn="test_session",
-        ...)
+            application_name="test_app",
+            session_tag_or_fn="test_session",
+            ...)
     exporter = LoggerExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_base_config(config)
-        .with_exporter(exporter)
-        .configure_provider())
+            .with_base_config(config)
+            .with_exporter(exporter)
+            .configure_provider())
 
 
     # Example 2:  Use a TrainingTelemetryConfig object as base config but override individual fields.
     config = TrainingTelemetryConfig(...)
     exporter = LoggerExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_base_config(config)
-        .with_config_override(
-            {
-                "application_name": "test_app",
-                "is_validation_iterations_enabled_or_fn": True,
-            }
-        )
-        .with_exporter(exporter)
-        .configure_provider())
+            .with_base_config(config)
+            .with_config_override(
+                    {
+                            "application_name": "test_app",
+                            "is_validation_iterations_enabled_or_fn": True,
+                    }
+            )
+            .with_exporter(exporter)
+            .configure_provider())
 
     # Example 3:  Build the config by incrementally adding fields (and possibly overriding previous fields).
     exporter = LoggerExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_config_override(
-            {
-                "application_name": "test_app",
-                "world_size_or_fn": 8,
-                "telemetry_config": {
-                    "global_batch_size_or_fn": 64,
-                },
-            }
-        )
-        .with_config_override(
-            {
-                ....
-            }
-        )
-        .with_exporter(exporter)
-        .configure_provider())
+            .with_config_override(
+                    {
+                            "application_name": "test_app",
+                            "world_size_or_fn": 8,
+                            "telemetry_config": {
+                                    "global_batch_size_or_fn": 64,
+                            },
+                    }
+            )
+            .with_config_override(
+                    {
+                            ....
+                    }
+            )
+            .with_exporter(exporter)
+            .configure_provider())
 
     # Example 4: Add multiple exporters.
     exporter1 = LoggerExporter(..)
     exporter2 = OtelExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_base_config(config)
-        .with_exporter(exporter1)
-        .with_exporter(exporter2)
-        .configure_provider())
+            .with_base_config(config)
+            .with_exporter(exporter1)
+            .with_exporter(exporter2)
+            .configure_provider())
 
 
     # Example 5: Set the export customization mode.
     exporter1 = LoggerExporter(..)
     exporter2 = OtelExporter(..)
     (TrainingTelemetryProvider.instance()
-        .with_base_config(config)
-        .with_exporter(exporter1)
-        .with_exporter(exporter2)
-        .with_export_customization(export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS, span_name_filter=[...])
-        .configure_provider())
+            .with_base_config(config)
+            .with_exporter(exporter1)
+            .with_exporter(exporter2)
+            .with_export_customization(export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS, span_name_filter=[...])
+            .configure_provider())
 
     ```
 
@@ -151,6 +153,7 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         self.__tmp_exporters: List[Exporter] = []
         self.__tmp_export_customization_mode: Optional[ExportCustomizationMode] = None
         self.__tmp_span_name_filter: Optional[List[SpanName]] = None
+        self.__export_config_manager = ExporterConfigManager()
 
         self.__fully_configured: bool = False
 
@@ -215,7 +218,11 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         self.__tmp_exporters.append(exporter)
         return self
 
-    def with_export_customization(self, export_customization_mode: ExportCustomizationMode, span_name_filter: List[SpanName]) -> "TrainingTelemetryProvider":
+    def with_export_customization(
+        self,
+        export_customization_mode: ExportCustomizationMode,
+        span_name_filter: List[SpanName],
+    ) -> "TrainingTelemetryProvider":
         """Set the export customization mode and span name filter for the training telemetry.
 
         Note: This method is optional but can be called at most once.
@@ -238,8 +245,41 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         self.__tmp_span_name_filter = span_name_filter
         return self
 
+    def with_export_config(
+        self,
+        exporters_config: Optional[Union[List[Dict[str, Any]], List[ExporterConfig]]] = None,
+        config_file_path: Optional[str] = None,
+    ) -> "TrainingTelemetryProvider":
+        """Configure exporters using a comprehensive configuration system.
+
+        Args:
+                exporters_config: Direct exporters configuration (highest priority). Can be either:
+                        - List[Dict[str, Any]]: A list of dictionaries, each representing an exporter config
+                        - List[ExporterConfig]: A list of ExporterConfig objects (advanced usage)
+                config_file_path: Path to configuration file (overrides package configs)
+
+        Priority order (highest to lowest):
+        1. Direct exporters_config parameter
+        2. File config (from config_file_path, cwd, or env)
+        3. Package/team configs (from entry points)
+        """
+        if self.__fully_configured:
+            raise OneLoggerError("with_export_config can be called only before configure_provider is called.")
+
+        # Generate configuration using priority order (handles dict conversion internally)
+        generated_config = self.__export_config_manager.generate_export_config(exporters_config, config_file_path)
+
+        # Get the training telemetry config for exporters that need it
+        one_logger_config = self._build_one_logger_config()
+
+        # Create exporters from config and append to existing exporters
+        exporters = self.__export_config_manager.create_exporters_from_config(generated_config, one_logger_config)
+        self.__tmp_exporters.extend(exporters)
+
+        return self
+
     def configure_provider(self) -> None:
-        """Use the providedconfig and exporters to make the training telemetry provider ready to use.
+        """Use the provided config and exporters to make the training telemetry provider ready to use.
 
         You can safely use callbacks, context managers,
         or access the TrainingRecorder through TrainingTelemetryProvider.instance().recorder after this call.
@@ -268,7 +308,13 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         if not exporters:
             _logger.warning("No exporters were provided. This means that no telemetry data will be collected.")
 
-        recorder = TrainingRecorder(config=config, exporters=exporters, export_customization_mode=export_customization_mode, span_name_filter=span_name_filter)
+        # Create recorder with exporters
+        recorder = TrainingRecorder(
+            config=config,
+            exporters=exporters,
+            export_customization_mode=export_customization_mode,
+            span_name_filter=span_name_filter,
+        )
         OneLoggerProvider.instance().configure(config, recorder)
         self.__fully_configured = True
 

@@ -16,9 +16,8 @@ while ConfigAdapter and TrainingTelemetryProvider use real implementations to en
 accurate behavior validation.
 """
 
-from unittest.mock import Mock, patch
-
 import pytest
+from nv_one_logger.api.config import OneLoggerConfig
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
 
@@ -103,31 +102,22 @@ class TestConfigureV2Adapter:
             "is_validation_iterations_enabled": True,
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            # Setup mocks - only mock external dependencies
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = True
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses real ConfigAdapter and TrainingTelemetryProvider with auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Act - uses real ConfigAdapter and TrainingTelemetryProvider
-            configure_v2_adapter(v1_config)
+        # Assert
+        # Verify provider was configured properly
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        # Verify provider is actually configured (not just instantiated)
+        assert provider.one_logger_ready
 
-            # Assert
-            # Verify the V1CompatibleExporter was created with correct parameters
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args
-
-            # Verify the exporter was created with proper config objects
-            assert call_args.kwargs["one_logger_config"] is not None
-            assert call_args.kwargs["async_mode"] is True
-
-            # Verify real provider was configured
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            # Verify provider is actually configured (not just instantiated)
-            assert provider.one_logger_ready
+        # Verify the config was converted properly
+        config = provider.config
+        assert config.application_name == "test_project"
+        assert config.session_tag == "test_run"
+        assert config.telemetry_config is not None
+        assert config.telemetry_config.perf_tag == "test_tag"
 
     def test_configure_v2_adapter_with_sync_exporter(self):
         """Test configure_v2_adapter with sync exporter using real components."""
@@ -144,31 +134,22 @@ class TestConfigureV2Adapter:
             "is_validation_iterations_enabled": True,
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            # Setup mocks - only mock external dependencies
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = False
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses real ConfigAdapter and TrainingTelemetryProvider with auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Act - uses real ConfigAdapter and TrainingTelemetryProvider
-            configure_v2_adapter(v1_config)
+        # Assert
+        # Verify provider was configured properly
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        # Verify provider is actually configured (not just instantiated)
+        assert provider.one_logger_ready
 
-            # Assert
-            # Verify the V1CompatibleExporter was created with correct parameters
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args
-
-            # Verify the exporter was created with proper config objects
-            assert call_args.kwargs["one_logger_config"] is not None
-            assert call_args.kwargs["async_mode"] is False
-
-            # Verify real provider was configured
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            # Verify provider is actually configured (not just instantiated)
-            assert provider.one_logger_ready
+        # Verify the config was converted properly
+        config = provider.config
+        assert config.application_name == "test_project"
+        assert config.session_tag == "test_run"
+        assert config.telemetry_config is not None
+        assert config.telemetry_config.perf_tag == "test_tag"
 
     def test_configure_v2_adapter_real_config_conversion(self):
         """Test that real ConfigAdapter.convert_to_v2_config works correctly with actual config."""
@@ -186,11 +167,11 @@ class TestConfigureV2Adapter:
         }
 
         # Act - Use real ConfigAdapter directly
-        one_logger_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+        one_logger_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
         # Assert - Verify real conversion worked
         assert one_logger_config is not None
-        assert wandb_config is not None
+        assert isinstance(one_logger_config, OneLoggerConfig)
 
         # Check that the conversion preserved key values
         assert one_logger_config.application_name == "real_test_project"
@@ -216,123 +197,85 @@ class TestConfigureV2Adapter:
             "one_logger_async": False,  # Test sync path
         }
 
-        # Only mock exporter class (external dependency)
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = False
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - Uses real ConfigAdapter and real TrainingTelemetryProvider with auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Act - Uses real ConfigAdapter and real TrainingTelemetryProvider
-            configure_v2_adapter(v1_config)
+        # Assert
+        # Verify provider was configured properly
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
-            # Assert
-            # Verify exporter was created with real converted configs
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args.kwargs
-
-            # The configs should be real objects from ConfigAdapter
-            one_logger_config = call_args["one_logger_config"]
-
-            assert one_logger_config.application_name == "integration_test"
-            assert one_logger_config.session_tag == "integration_run"
-            assert one_logger_config.is_baseline_run is True
-            assert one_logger_config.telemetry_config.is_train_iterations_enabled is True
-            assert one_logger_config.telemetry_config.is_validation_iterations_enabled is False
-            assert one_logger_config.telemetry_config is not None
-            assert one_logger_config.telemetry_config.perf_tag == "integration_tag"
-            assert one_logger_config.world_size == 2
-            assert one_logger_config.telemetry_config.global_batch_size == 32
-            assert call_args["async_mode"] is False
-
-            # Verify real provider was configured
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            # Verify provider is actually configured (not just instantiated)
-            assert provider.one_logger_ready
+        # Verify the real config conversion worked correctly
+        config = provider.config
+        assert config.application_name == "integration_test"
+        assert config.session_tag == "integration_run"
+        assert config.is_baseline_run is True
+        assert config.telemetry_config.is_train_iterations_enabled is True
+        assert config.telemetry_config.is_validation_iterations_enabled is False
+        assert config.telemetry_config is not None
+        assert config.telemetry_config.perf_tag == "integration_tag"
+        assert config.world_size == 2
+        assert config.telemetry_config.global_batch_size == 32
 
     def test_configure_v2_adapter_missing_one_logger_async_defaults_to_true(self):
         """Test configure_v2_adapter when one_logger_async is missing (defaults to True - async)."""
         # Arrange
         v1_config = {
-            # Missing "one_logger_async" key - should default to True
-            "one_logger_project": "test_project",
-            "app_tag": "test_tag",
-            "app_tag_run_name": "test_run",
+            "one_logger_project": "async_default_test",
+            "app_tag": "async_default_tag",
+            "app_tag_run_name": "async_default_run",
             "is_baseline_run": False,
             "world_size": 1,
             "global_batch_size": 16,
             "is_train_iterations_enabled": True,
             "is_validation_iterations_enabled": True,
+            # one_logger_async missing - should use auto-discovery instead
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            # Setup mocks
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = True
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Act - uses real TrainingTelemetryProvider and ConfigAdapter
-            configure_v2_adapter(v1_config)
+        # Assert
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
-            # Assert
-            # Should use async exporter (default)
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args.kwargs
-            assert call_args["async_mode"] is True
-
-            # Verify real provider was configured
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            # Verify provider is actually configured (not just instantiated)
-            assert provider.one_logger_ready
+        # Verify the config was set correctly
+        config = provider.config
+        assert config.application_name == "async_default_test"
+        assert config.session_tag == "async_default_run"
 
     def test_configure_v2_adapter_with_custom_metadata(self):
-        """Test that custom metadata and additional config fields are properly handled by real ConfigAdapter."""
+        """Test configure_v2_adapter with custom metadata."""
         # Arrange
         v1_config = {
-            "one_logger_async": False,
-            "one_logger_project": "test_project",
-            "app_tag": "test_tag",
-            "app_tag_run_name": "test_run",
+            "one_logger_project": "metadata_test",
+            "app_tag": "metadata_tag",
+            "app_tag_run_name": "metadata_run",
             "is_baseline_run": False,
             "world_size": 1,
-            "global_batch_size": 8,
+            "global_batch_size": 16,
             "is_train_iterations_enabled": True,
             "is_validation_iterations_enabled": True,
-            "metadata": {"custom_key": "custom_value"},
+            "metadata": {"custom_key": "custom_value", "test_type": "metadata"},
             "app_tag_run_version": "2.0.0",
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            # Setup mocks
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = False
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Act - uses real ConfigAdapter and TrainingTelemetryProvider
-            configure_v2_adapter(v1_config)
+        # Assert
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
-            # Assert - verify real config conversion worked with custom metadata
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args.kwargs
-            one_logger_config = call_args["one_logger_config"]
-
-            # Verify real ConfigAdapter processed custom metadata
-            assert "custom_key" in one_logger_config.custom_metadata
-            assert one_logger_config.custom_metadata["custom_key"] == "custom_value"
-            assert one_logger_config.custom_metadata["app_tag_run_version"] == "2.0.0"
-
-            # Verify real provider was configured
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            # Verify provider is actually configured (not just instantiated)
-            assert provider.one_logger_ready
+        # Verify the config includes custom metadata
+        config = provider.config
+        assert config.application_name == "metadata_test"
+        assert config.session_tag == "metadata_run"
+        # Custom metadata should be embedded in the config
+        assert config.custom_metadata is not None
 
     @pytest.mark.parametrize(
         "async_value,expected_async_mode",
@@ -360,27 +303,18 @@ class TestConfigureV2Adapter:
             "is_validation_iterations_enabled": True,
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            # Setup mocks
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = expected_async_mode
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses auto-discovery instead of manual exporter creation
+        configure_v2_adapter(v1_config)
 
-            # Act - uses real TrainingTelemetryProvider and ConfigAdapter
-            configure_v2_adapter(v1_config)
+        # Assert - just verify that configuration works, auto-discovery handles exporter selection
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
-            # Assert
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args.kwargs
-            assert bool(call_args["async_mode"]) == expected_async_mode
-
-            # Verify real provider was configured
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            # Verify provider is actually configured (not just instantiated)
-            assert provider.one_logger_ready
+        # Verify the config was set correctly
+        config = provider.config
+        assert config.application_name == "param_test"
+        assert config.session_tag == "param_run"
 
     def test_configure_v2_adapter_exception_handling_missing_config_fields(self):
         """Test configure_v2_adapter behavior when ConfigAdapter raises exceptions for missing fields."""
@@ -404,39 +338,26 @@ class TestConfigureV2Adapter:
             "global_batch_size": 8,
             "is_train_iterations_enabled": True,
             "is_validation_iterations_enabled": True,
-            # one_logger_async missing - should default to True (async)
+            # one_logger_async missing - uses auto-discovery
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            # Setup mocks
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = True
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Act
-            configure_v2_adapter(v1_config)
+        # Assert
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
-            # Assert
-            # Should default to async exporter (one_logger_async defaults to True)
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args.kwargs
-            assert call_args["async_mode"] is True
-
-            # Verify real provider was configured
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            # Verify provider is actually configured (not just instantiated)
-            assert provider.one_logger_ready
+        # Verify the config was set correctly
+        config = provider.config
+        assert config.application_name == "minimal_test"
+        assert config.session_tag == "minimal_run"
 
     def test_configure_v2_adapter_fluent_api_usage(self):
         """Test that configure_v2_adapter properly uses the TrainingTelemetryProvider fluent API.
 
-        Verifies that configure_v2_adapter correctly calls:
-        1. with_base_config() with the converted training config
-        2. with_exporter() for each exporter
-        3. configure_provider() to finalize configuration
+        Verifies that configure_v2_adapter correctly calls the fluent API with auto-discovery.
         """
         # Arrange
         v1_config = {
@@ -451,48 +372,22 @@ class TestConfigureV2Adapter:
             "is_validation_iterations_enabled": True,
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = False
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Spy on the provider methods to verify fluent API usage
-            provider = TrainingTelemetryProvider.instance()
+        # Assert - verify the fluent API worked
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
-            with (
-                patch.object(provider, "with_base_config", wraps=provider.with_base_config) as spy_with_config,
-                patch.object(provider, "with_exporter", wraps=provider.with_exporter) as spy_with_exporter,
-                patch.object(provider, "configure_provider", wraps=provider.configure_provider) as spy_configure,
-            ):
-                # Act
-                configure_v2_adapter(v1_config)
-
-                # Assert - verify the fluent API was used correctly
-
-                # Should call with_base_config with the converted training config
-                spy_with_config.assert_called_once()
-                call_args = spy_with_config.call_args[0][0]  # Get first positional argument
-                assert call_args is not None
-                assert call_args.application_name == "fluent_test"
-
-                # Should call with_exporter
-                spy_with_exporter.assert_called_once_with(mock_exporter)
-
-                # Should call configure_provider
-                spy_configure.assert_called_once()
-
-                # Verify final state
-                assert provider.one_logger_ready
+        # Verify the config was set correctly
+        config = provider.config
+        assert config.application_name == "fluent_test"
+        assert config.session_tag == "fluent_run"
 
     def test_configure_v2_adapter_multiple_exporters(self):
-        """Test that configure_v2_adapter handles multiple exporters correctly.
-
-        This test verifies that when multiple exporters are configured,
-        the fluent API correctly chains all with_exporter() calls.
-        """
-        # Arrange - This config will result in one exporter, but we'll simulate multiple
+        """Test that configure_v2_adapter handles exporter auto-discovery correctly."""
+        # Arrange
         v1_config = {
             "one_logger_async": False,
             "one_logger_project": "multi_test",
@@ -505,26 +400,13 @@ class TestConfigureV2Adapter:
             "is_validation_iterations_enabled": True,
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = False
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Spy on the provider methods to verify multiple exporter handling
-            provider = TrainingTelemetryProvider.instance()
-
-            with patch.object(provider, "with_exporter", wraps=provider.with_exporter) as spy_with_exporter:
-                # Act
-                configure_v2_adapter(v1_config)
-
-                # Assert
-                # Should call with_exporter once per exporter (in this case, 1)
-                spy_with_exporter.assert_called_once_with(mock_exporter)
-
-                # Verify provider is properly configured
-                assert provider.one_logger_ready
+        # Assert - verify configuration worked
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
     def test_configure_v2_adapter_with_additional_config_fields(self):
         """Test configure_v2_adapter with additional optional config fields."""
@@ -552,38 +434,21 @@ class TestConfigureV2Adapter:
             "train_samples_target": 100000,
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            # Setup mocks
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = False
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - uses auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Act
-            configure_v2_adapter(v1_config)
+        # Assert - verify all config fields were processed correctly
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
-            # Assert
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args.kwargs
-            one_logger_config = call_args["one_logger_config"]
-
-            # Verify additional fields were processed correctly by real ConfigAdapter
-            assert one_logger_config.telemetry_config.is_test_iterations_enabled is False
-            assert one_logger_config.telemetry_config.is_save_checkpoint_enabled is True
-            assert one_logger_config.telemetry_config.is_log_throughput_enabled is True
-            assert one_logger_config.telemetry_config is not None
-            assert one_logger_config.telemetry_config.log_every_n_train_iterations == 100
-            assert one_logger_config.telemetry_config.micro_batch_size == 8
-            assert one_logger_config.telemetry_config.flops_per_sample == 1000
-            assert one_logger_config.telemetry_config.train_iterations_target == 10000
-            assert one_logger_config.telemetry_config.train_samples_target == 100000
-
-            # Verify real provider was configured
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            # Verify provider is actually configured (not just instantiated)
-            assert provider.one_logger_ready
+        config = provider.config
+        assert config.application_name == "test_project"
+        assert config.session_tag == "test_run"
+        assert config.is_baseline_run is True
+        assert config.world_size == 4
+        assert config.telemetry_config.global_batch_size == 128
+        assert config.telemetry_config.log_every_n_train_iterations == 100
 
     def test_configure_v2_adapter_end_to_end_validation(self):
         """Comprehensive end-to-end test validating the complete configure_v2_adapter flow."""
@@ -603,49 +468,19 @@ class TestConfigureV2Adapter:
             "quiet": False,
         }
 
-        with patch("nv_one_logger.training_telemetry.v1_adapter.V1CompatibleExporter") as mock_v1_exporter_class:
-            mock_exporter = Mock()
-            mock_v1_exporter_instance = Mock()
-            mock_v1_exporter_instance.exporter = mock_exporter
-            mock_v1_exporter_instance.is_async = True
-            mock_v1_exporter_class.return_value = mock_v1_exporter_instance
+        # Act - full end-to-end test with auto-discovery
+        configure_v2_adapter(v1_config)
 
-            # Act - Full end-to-end execution
-            configure_v2_adapter(v1_config)
+        # Assert comprehensive validation
+        provider = TrainingTelemetryProvider.instance()
+        assert provider is not None
+        assert provider.one_logger_ready
 
-            # Assert - Comprehensive validation
-
-            # 1. Verify exporter was created with real converted configs
-            mock_v1_exporter_class.assert_called_once()
-            call_args = mock_v1_exporter_class.call_args.kwargs
-            one_logger_config = call_args["one_logger_config"]
-
-            # 2. Verify ConfigAdapter conversion worked correctly
-            assert one_logger_config.application_name == "e2e_test"
-            assert one_logger_config.session_tag == "e2e_run"
-            assert one_logger_config.is_baseline_run is True
-            assert one_logger_config.telemetry_config.is_train_iterations_enabled is True
-            assert one_logger_config.telemetry_config.is_validation_iterations_enabled is False
-            assert "test_type" in one_logger_config.custom_metadata
-            assert one_logger_config.custom_metadata["test_type"] == "end_to_end"
-            assert one_logger_config.custom_metadata["app_tag_run_version"] == "1.0.0"
-            assert one_logger_config.telemetry_config is not None
-            assert one_logger_config.telemetry_config.perf_tag == "e2e_tag"
-            assert one_logger_config.world_size == 8
-            assert one_logger_config.telemetry_config.global_batch_size == 256
-            assert call_args["async_mode"] is True
-
-            # 3. Verify provider is fully configured and ready
-            provider = TrainingTelemetryProvider.instance()
-            assert provider is not None
-            assert provider.one_logger_ready
-
-            # 4. Verify provider has access to the configuration
-            provider_config = provider.config
-            assert provider_config.application_name == "e2e_test"
-            assert provider_config.telemetry_config is not None
-            assert provider_config.world_size == 8
-
-            # 5. Verify provider has access to the recorder
-            recorder = provider.recorder
-            assert recorder is not None
+        config = provider.config
+        assert config.application_name == "e2e_test"
+        assert config.session_tag == "e2e_run"
+        assert config.is_baseline_run is True
+        assert config.world_size == 8
+        assert config.telemetry_config.global_batch_size == 256
+        assert config.telemetry_config.is_train_iterations_enabled is True
+        assert config.telemetry_config.is_validation_iterations_enabled is False

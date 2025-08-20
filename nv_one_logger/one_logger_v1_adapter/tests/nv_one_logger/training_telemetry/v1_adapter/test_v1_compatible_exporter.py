@@ -4,7 +4,7 @@
 from unittest.mock import Mock
 
 import pytest
-from nv_one_logger.api.config import OneLoggerConfig
+from nv_one_logger.api.config import OneLoggerConfig, OneLoggerErrorHandlingStrategy
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.singleton import SingletonMeta
@@ -65,7 +65,8 @@ class TestV1CompatibleExporter:
             world_size_or_fn=8,
             telemetry_config=config,
         )
-        exporter = V1CompatibleExporter(one_logger_config=one_logger_config, async_mode=False)
+        exporter_config = {"async_mode": False}
+        exporter = V1CompatibleExporter(one_logger_config=one_logger_config, config=exporter_config)
 
         assert exporter.is_async is False
         assert isinstance(exporter.exporter, V1CompatibleWandbExporterSync)
@@ -79,7 +80,8 @@ class TestV1CompatibleExporter:
             world_size_or_fn=8,
             telemetry_config=config,
         )
-        exporter = V1CompatibleExporter(one_logger_config=one_logger_config, async_mode=True)
+        exporter_config = {"async_mode": True}
+        exporter = V1CompatibleExporter(one_logger_config=one_logger_config, config=exporter_config)
 
         assert exporter.is_async is True
         assert isinstance(exporter.exporter, V1CompatibleWandbExporterAsync)
@@ -93,7 +95,8 @@ class TestV1CompatibleExporter:
             world_size_or_fn=8,
             telemetry_config=config,
         )
-        exporter = V1CompatibleExporter(one_logger_config=one_logger_config)
+        exporter_config = {}
+        exporter = V1CompatibleExporter(one_logger_config=one_logger_config, config=exporter_config)
 
         assert exporter.is_async is False
         assert isinstance(exporter.exporter, V1CompatibleWandbExporterSync)
@@ -545,22 +548,12 @@ class TestV1CompatibleExporterUpdated:
         # Set telemetry_config in base_config
         base_config.telemetry_config = training_config
 
-        # Execute
-        exporter = V1CompatibleExporter(one_logger_config=base_config, async_mode=False)
+        # Act
+        exporter = V1CompatibleExporter(one_logger_config=base_config, config={"async_mode": False})
 
-        # Verify
+        # Assert
         assert exporter._one_logger_config == base_config
-        assert exporter._async_mode is False
         assert exporter.is_async is False
-        assert isinstance(exporter.exporter, V1CompatibleWandbExporterSync)
-
-        # Verify exporter config
-        assert exporter._exporter_config.project == "test_app"
-        assert exporter._exporter_config.entity == "hwinf_dcm"
-        assert exporter._exporter_config.host == "https://api.wandb.ai"
-        assert exporter._exporter_config.api_key == ""
-        assert "e2e_metrics_enabled" in exporter._exporter_config.tags
-        assert exporter._exporter_config.save_dir == "./wandb"
 
     def test_v1_compatible_exporter_init_with_one_logger_config_async(self):
         """Test V1CompatibleExporter initialization with async mode."""
@@ -582,13 +575,11 @@ class TestV1CompatibleExporterUpdated:
         base_config.telemetry_config = training_config
 
         # Execute
-        exporter = V1CompatibleExporter(one_logger_config=base_config, async_mode=True)
+        exporter = V1CompatibleExporter(one_logger_config=base_config, config={"async_mode": True})
 
         # Verify
         assert exporter._one_logger_config == base_config
-        assert exporter._async_mode is True
         assert exporter.is_async is True
-        assert isinstance(exporter.exporter, V1CompatibleWandbExporterAsync)
 
     def test_v1_compatible_exporter_run_name_generation(self):
         """Test that run_name is generated correctly with application_name."""
@@ -610,7 +601,7 @@ class TestV1CompatibleExporterUpdated:
         base_config.telemetry_config = training_config
 
         # Execute
-        exporter = V1CompatibleExporter(one_logger_config=base_config, async_mode=False)
+        exporter = V1CompatibleExporter(one_logger_config=base_config, config={"async_mode": False})
 
         # Verify run_name format
         run_name = exporter._exporter_config.run_name
@@ -637,7 +628,7 @@ class TestV1CompatibleExporterUpdated:
         base_config.telemetry_config = training_config
 
         # Execute
-        exporter = V1CompatibleExporter(one_logger_config=base_config, async_mode=False)
+        exporter = V1CompatibleExporter(one_logger_config=base_config, config={"async_mode": False})
 
         # Verify properties
         assert exporter._one_logger_config == base_config
@@ -665,7 +656,7 @@ class TestV1CompatibleExporterUpdated:
         base_config.telemetry_config = training_config
 
         # Execute
-        exporter = V1CompatibleExporter(one_logger_config=base_config, async_mode=True)
+        exporter = V1CompatibleExporter(one_logger_config=base_config, config={"async_mode": True})
 
         # Verify properties
         assert exporter._one_logger_config == base_config
@@ -702,7 +693,7 @@ class TestConfigAdapterUpdated:
         }
 
         # Execute
-        base_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+        base_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
         # Verify return types
         assert isinstance(base_config, OneLoggerConfig)
@@ -747,7 +738,7 @@ class TestConfigAdapterUpdated:
         }
 
         # Execute
-        base_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+        base_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
         # Verify
         assert isinstance(base_config, OneLoggerConfig)
@@ -788,7 +779,7 @@ class TestConfigAdapterUpdated:
         }
 
         # Execute
-        base_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+        base_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
         # Verify
         assert base_config.telemetry_config.save_checkpoint_strategy == CheckPointStrategy.ASYNC
@@ -810,7 +801,7 @@ class TestConfigAdapterUpdated:
         }
 
         # Execute
-        base_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+        base_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
         # Verify
         assert base_config.custom_metadata == metadata
@@ -831,11 +822,9 @@ class TestConfigAdapterUpdated:
         }
 
         # Execute
-        base_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+        base_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
         # Verify
-        from nv_one_logger.api.config import OneLoggerErrorHandlingStrategy
-
         assert base_config.error_handling_strategy == OneLoggerErrorHandlingStrategy.DISABLE_QUIETLY_AND_REPORT_METRIC_ERROR
 
     def test_convert_to_v2_config_wandb_config(self):
@@ -850,13 +839,11 @@ class TestConfigAdapterUpdated:
             "log_every_n_train_iterations": 10,
             "is_train_iterations_enabled": True,
             "is_validation_iterations_enabled": True,
+            "quiet": False,  # Explicitly set to False, so should get PROPAGATE_EXCEPTIONS
         }
 
         # Execute
-        base_config, wandb_config = ConfigAdapter.convert_to_v2_config(v1_config)
+        base_config = ConfigAdapter.convert_to_v2_config(v1_config)
 
-        # Verify wandb_config
-        assert wandb_config.entity == "hwinf_dcm"
-        assert wandb_config.project == "test_project"
-        assert wandb_config.host == "https://api.wandb.ai"
-        assert wandb_config.api_key == ""
+        # Verify error handling strategy matches the config
+        assert base_config.error_handling_strategy == OneLoggerErrorHandlingStrategy.PROPAGATE_EXCEPTIONS

@@ -6,6 +6,7 @@ This module contains tests that verify the functionality of the TrainingTelemetr
 including configuration, recorder management, and singleton behavior.
 """
 
+from pathlib import Path
 from typing import Generator, List, cast
 from unittest.mock import MagicMock, Mock, patch
 
@@ -16,6 +17,8 @@ from nv_one_logger.api.telemetry_config import ApplicationType
 from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.span import SpanName
 from nv_one_logger.exporter.exporter import Exporter
+from nv_one_logger.exporter.file_exporter import FileExporter
+from nv_one_logger.exporter.logger_exporter import LoggerExporter
 from nv_one_logger.recorder.default_recorder import ExportCustomizationMode
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
@@ -204,7 +207,10 @@ class TestTrainingTelemetryProvider:
         TrainingTelemetryProvider.instance().with_base_config(_BASE_CONFIG).with_exporter(mock_exporter).with_exporter(
             another_mock_exporter
         ).configure_provider()
-        assert TrainingTelemetryProvider.instance().recorder._exporters == [mock_exporter, another_mock_exporter]
+        assert TrainingTelemetryProvider.instance().recorder._exporters == [
+            mock_exporter,
+            another_mock_exporter,
+        ]
 
     def test_no_exporters_success(self) -> None:
         """Test that if we don't provide any exporters, the builder doesn't raise an error."""
@@ -215,7 +221,10 @@ class TestTrainingTelemetryProvider:
 
     def test_no_config_raises_error(self, mock_exporter: Exporter) -> None:
         """Test that if we don't provide any config, the builder raises an error."""
-        with pytest.raises(OneLoggerError, match="No configuration was provided. Please provide a base config and/or config overrides."):
+        with pytest.raises(
+            OneLoggerError,
+            match="No configuration was provided. Please provide a base config and/or config overrides.",
+        ):
             TrainingTelemetryProvider.instance().with_exporter(mock_exporter).configure_provider()
 
     def test_build_one_logger_config_without_base_config(self) -> None:
@@ -279,7 +288,10 @@ class TestTrainingTelemetryProvider:
             provider.with_base_config(_BASE_CONFIG)
             .with_exporter(mock_exporter)
             .with_exporter(another_mock_exporter)
-            .with_export_customization(export_customization_mode=ExportCustomizationMode.WHITELIST_SPANS, span_name_filter=custom_span_filter)
+            .with_export_customization(
+                export_customization_mode=ExportCustomizationMode.WHITELIST_SPANS,
+                span_name_filter=custom_span_filter,
+            )
             .configure_provider()
         )
 
@@ -298,22 +310,34 @@ class TestTrainingTelemetryProvider:
             (
                 TrainingTelemetryProvider.instance()
                 .with_base_config(_BASE_CONFIG)
-                .with_export_customization(export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS, span_name_filter=custom_span_filter)
-                .with_export_customization(export_customization_mode=ExportCustomizationMode.WHITELIST_SPANS, span_name_filter=another_span_filter)
+                .with_export_customization(
+                    export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS,
+                    span_name_filter=custom_span_filter,
+                )
+                .with_export_customization(
+                    export_customization_mode=ExportCustomizationMode.WHITELIST_SPANS,
+                    span_name_filter=another_span_filter,
+                )
             )
 
     def test_with_config_override_after_configure_provider_raises_error(self) -> None:
         """Test that calling with_config_override after configure_provider raises an error."""
         provider = TrainingTelemetryProvider.instance()
         provider.with_base_config(_BASE_CONFIG).configure_provider()
-        with pytest.raises(OneLoggerError, match="with_config_override can be called only before configure_provider is called."):
+        with pytest.raises(
+            OneLoggerError,
+            match="with_config_override can be called only before configure_provider is called.",
+        ):
             provider.with_config_override({"log_every_n_train_iterations": 100})
 
     def test_with_exporter_after_configure_provider_raises_error(self, mock_exporter: Exporter) -> None:
         """Test that calling with_exporter after configure_provider raises an error."""
         provider = TrainingTelemetryProvider.instance()
         provider.with_base_config(_BASE_CONFIG).configure_provider()
-        with pytest.raises(OneLoggerError, match="with_exporter can be called only before configure_provider is called."):
+        with pytest.raises(
+            OneLoggerError,
+            match="with_exporter can be called only before configure_provider is called.",
+        ):
             provider.with_exporter(mock_exporter)
 
     def test_with_export_customization_after_configure_raises_error(self) -> None:
@@ -322,8 +346,14 @@ class TestTrainingTelemetryProvider:
         provider.with_base_config(_BASE_CONFIG).configure_provider()
 
         custom_span_filter = cast(List[SpanName], [StandardTrainingJobSpanName.TRAINING_LOOP])
-        with pytest.raises(OneLoggerError, match="with_export_customization can be called only before configure_provider is called."):
-            provider.with_export_customization(export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS, span_name_filter=custom_span_filter)
+        with pytest.raises(
+            OneLoggerError,
+            match="with_export_customization can be called only before configure_provider is called.",
+        ):
+            provider.with_export_customization(
+                export_customization_mode=ExportCustomizationMode.BLACKLIST_SPANS,
+                span_name_filter=custom_span_filter,
+            )
 
     def test_configure_provider_without_export_customization_uses_defaults(self, mock_exporter: Exporter) -> None:
         """Test that configure_provider uses default export customization when not specified."""
@@ -673,3 +703,252 @@ class TestTrainingTelemetryProviderSetTrainingTelemetryConfig:
 
             # Verify that _update_application_span_with_training_telemetry_config was called with the correct config
             mock_recorder._update_application_span_with_training_telemetry_config.assert_called_once_with(training_telemetry_config=training_config)
+
+    def test_with_export_config_direct_dict_success(self, valid_config: TrainingTelemetryConfig) -> None:
+        """Test that with_export_config works with direct dictionary configuration."""
+        provider = TrainingTelemetryProvider.instance()
+
+        # Test with direct dictionary configuration
+        exporters_config = [
+            {
+                "class_name": "nv_one_logger.exporter.file_exporter.FileExporter",
+                "config": {"file_path": "/tmp/test_export.log"},
+                "enabled": True,
+            }
+        ]
+
+        provider.with_base_config(valid_config).with_export_config(exporters_config=exporters_config).configure_provider()
+
+        # Verify that the provider was configured successfully
+        assert provider.recorder and isinstance(provider.recorder, TrainingRecorder)
+        # Our FileExporter should be present, and package configs may also be present
+        assert len(provider.recorder._exporters) >= 1
+        # Check that our FileExporter is present
+        exporter_types = [type(exporter) for exporter in provider.recorder._exporters]
+        assert FileExporter in exporter_types
+
+    def test_with_export_config_after_configure_provider_raises_error(self, valid_config: TrainingTelemetryConfig) -> None:
+        """Test that with_export_config raises an error when called after configure_provider."""
+        provider = TrainingTelemetryProvider.instance()
+        provider.with_base_config(valid_config).configure_provider()
+
+        # Try to call with_export_config after configure_provider
+        exporters_config = [
+            {
+                "class_name": "nv_one_logger.exporter.file_exporter.FileExporter",
+                "config": {"file_path": "/tmp/test.log"},
+            }
+        ]
+
+        with pytest.raises(
+            OneLoggerError,
+            match="with_export_config can be called only before configure_provider is called",
+        ):
+            provider.with_export_config(exporters_config=exporters_config)
+
+    def test_with_export_config_multiple_exporters(self, valid_config: TrainingTelemetryConfig) -> None:
+        """Test that with_export_config works with multiple exporters."""
+        provider = TrainingTelemetryProvider.instance()
+
+        # Test with multiple exporters
+        exporters_config = [
+            {
+                "class_name": "nv_one_logger.exporter.file_exporter.FileExporter",
+                "config": {"file_path": "/tmp/test1.log"},
+                "enabled": True,
+            },
+            {
+                "class_name": "nv_one_logger.exporter.logger_exporter.LoggerExporter",
+                "config": {"logger": "test_logger"},
+                "enabled": True,
+            },
+        ]
+
+        provider.with_base_config(valid_config).with_export_config(exporters_config=exporters_config).configure_provider()
+
+        # Verify that both exporters were created
+        assert provider.recorder and isinstance(provider.recorder, TrainingRecorder)
+        assert len(provider.recorder._exporters) >= 2
+
+        # Check that we have both types of exporters
+        exporter_types = [type(exporter) for exporter in provider.recorder._exporters]
+        assert FileExporter in exporter_types
+        assert LoggerExporter in exporter_types
+
+    def test_with_export_config_disabled_exporter(self, valid_config: TrainingTelemetryConfig) -> None:
+        """Test that with_export_config respects the enabled flag."""
+        provider = TrainingTelemetryProvider.instance()
+
+        # Test with disabled exporter
+        exporters_config = [
+            {
+                "class_name": "nv_one_logger.exporter.file_exporter.FileExporter",
+                "config": {"file_path": "/tmp/test.log"},
+                "enabled": False,
+            }
+        ]
+
+        provider.with_base_config(valid_config).with_export_config(exporters_config=exporters_config).configure_provider()
+
+        # Verify that our disabled FileExporter was not created, but package configs may still be present
+        assert provider.recorder and isinstance(provider.recorder, TrainingRecorder)
+        # Our FileExporter should not be present (since it was disabled)
+        exporter_types = [type(exporter) for exporter in provider.recorder._exporters]
+        assert FileExporter not in exporter_types
+
+    def test_with_export_config_priority_behavior(self, valid_config: TrainingTelemetryConfig) -> None:
+        """Test that with_export_config correctly implements priority behavior.
+
+        This test verifies the priority system works correctly without depending on
+        specific package configurations being present.
+        """
+        provider = TrainingTelemetryProvider.instance()
+
+        # Test 1: Direct config should always be applied regardless of package configs
+        exporters_config = [
+            {
+                "class_name": "nv_one_logger.exporter.file_exporter.FileExporter",
+                "config": {"file_path": "/tmp/priority_behavior_test.log"},
+                "enabled": True,
+            }
+        ]
+
+        provider.with_base_config(valid_config).with_export_config(exporters_config=exporters_config).configure_provider()
+
+        # Our specified exporter must always be present
+        assert provider.recorder and isinstance(provider.recorder, TrainingRecorder)
+        exporter_types = [type(exporter) for exporter in provider.recorder._exporters]
+        assert FileExporter in exporter_types
+
+        # Test 2: Verify that our exporter has the correct configuration
+        our_exporter = None
+        for exporter in provider.recorder._exporters:
+            if isinstance(exporter, FileExporter) and exporter._filepath == Path("/tmp/priority_behavior_test.log"):
+                our_exporter = exporter
+                break
+
+        assert our_exporter is not None, "Our specifically configured exporter should be present"
+
+    def test_with_export_config_merge_behavior(self, valid_config: TrainingTelemetryConfig) -> None:
+        """Test that with_export_config correctly merges different exporter types.
+
+        This test verifies that different exporter types are combined rather than replaced,
+        demonstrating the merge behavior of the priority system.
+        """
+        provider = TrainingTelemetryProvider.instance()
+
+        # Create a config with multiple different exporter types
+        exporters_config = [
+            {
+                "class_name": "nv_one_logger.exporter.file_exporter.FileExporter",
+                "config": {"file_path": "/tmp/merge_test1.log"},
+                "enabled": True,
+            },
+            {
+                "class_name": "nv_one_logger.exporter.logger_exporter.LoggerExporter",
+                "config": {"logger": "merge_test_logger"},
+                "enabled": True,
+            },
+        ]
+
+        provider.with_base_config(valid_config).with_export_config(exporters_config=exporters_config).configure_provider()
+
+        # Verify that both our specified exporters are present
+        assert provider.recorder and isinstance(provider.recorder, TrainingRecorder)
+        exporter_types = [type(exporter) for exporter in provider.recorder._exporters]
+
+        # Our specified exporters must be present
+        assert FileExporter in exporter_types
+        assert LoggerExporter in exporter_types
+
+        # The total count should be at least our 2 exporters (may be more from package configs)
+        assert len(provider.recorder._exporters) >= 2
+
+    def test_with_export_config_package_discovery(self, valid_config: TrainingTelemetryConfig) -> None:
+        """Test that with_export_config discovers and uses package configurations.
+
+        This test verifies that the package discovery mechanism works correctly
+        by testing the entry points system without depending on specific packages.
+        """
+        from importlib.metadata import entry_points
+
+        # Test 1: Verify that entry points discovery works
+        entry_points_list = list(entry_points(group="nv_one_logger.exporter_configs"))
+
+        # The number of entry points depends on what's installed, but the mechanism should work
+        print(f"Found {len(entry_points_list)} exporter config entry points")
+
+        # Test 2: Verify that the ExporterConfigManager can load configurations
+        from nv_one_logger.exporter.export_config_manager import ExporterConfigManager
+
+        manager = ExporterConfigManager()
+
+        # The manager should have loaded configurations from entry points
+        print(f"ExporterConfigManager loaded {len(manager.entry_point_exporter_configs)} config classes")
+
+        # Test 3: Verify that with_export_config() without direct config uses package configs
+        provider = TrainingTelemetryProvider.instance()
+        provider.with_base_config(valid_config).with_export_config().configure_provider()
+
+        # The provider should have exporters (either from package configs or none)
+        assert provider.recorder and isinstance(provider.recorder, TrainingRecorder)
+
+        # Test 4: Verify that package configs are valid exporters
+        for exporter in provider.recorder._exporters:
+            # All exporters should have the basic exporter interface
+            assert hasattr(exporter, "initialize")
+            assert hasattr(exporter, "export_start")
+            assert hasattr(exporter, "export_stop")
+            assert hasattr(exporter, "export_event")
+            assert hasattr(exporter, "export_error")
+            assert hasattr(exporter, "export_telemetry_data_error")
+            assert hasattr(exporter, "close")
+
+        print(f"Successfully created {len(provider.recorder._exporters)} exporters from package configurations")
+
+    def test_with_export_config_package_override_behavior(self, valid_config: TrainingTelemetryConfig) -> None:
+        """Test that with_export_config correctly overrides package configurations.
+
+        This test verifies that direct configuration properly overrides package
+        configurations when they have the same exporter class.
+        """
+        provider = TrainingTelemetryProvider.instance()
+
+        # First, get the baseline exporters from package configs
+        provider.with_base_config(valid_config).with_export_config().configure_provider()
+        baseline_exporters = len(provider.recorder._exporters)
+
+        print(f"Baseline: {baseline_exporters} exporters from package configs")
+
+        # Reset and test with direct config that should override package configs
+        reset_singletong_providers_for_test()
+
+        # Create a direct config that might override package configs
+        exporters_config = [
+            {
+                "class_name": "nv_one_logger.exporter.file_exporter.FileExporter",
+                "config": {"file_path": "/tmp/override_test.log"},
+                "enabled": True,
+            }
+        ]
+
+        provider = TrainingTelemetryProvider.instance()
+        provider.with_base_config(valid_config).with_export_config(exporters_config=exporters_config).configure_provider()
+
+        # Our FileExporter should be present
+        exporter_types = [type(exporter) for exporter in provider.recorder._exporters]
+        assert FileExporter in exporter_types
+
+        # The total count should be at least 1 (our exporter)
+        assert len(provider.recorder._exporters) >= 1
+
+        print(f"With override: {len(provider.recorder._exporters)} exporters (our FileExporter + any remaining package configs)")
+
+        # Verify our specific configuration was applied
+        our_exporter = None
+        for exporter in provider.recorder._exporters:
+            if isinstance(exporter, FileExporter) and exporter._filepath == Path("/tmp/override_test.log"):
+                our_exporter = exporter
+                break
+
+        assert our_exporter is not None, "Our specifically configured FileExporter should be present"

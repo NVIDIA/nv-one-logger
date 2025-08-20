@@ -18,6 +18,7 @@ from nv_one_logger.core.event import ErrorEvent, Event
 from nv_one_logger.core.exceptions import OneLoggerError, assert_that
 from nv_one_logger.core.internal.version import get_version
 from nv_one_logger.core.span import Span, SpanName, StandardSpanAttributeName, StandardSpanName
+from nv_one_logger.exporter.exporter import BaseExporter, TelemetryDataError
 from nv_one_logger.training_telemetry.api.attributes import (
     CheckpointSaveSpanAttributes,
     OneLoggerInitializationAttributes,
@@ -595,36 +596,40 @@ class V1CompatibleWandbExporterAsync(WandBExporterAsync):
         pass
 
 
-class V1CompatibleExporter:
+class V1CompatibleExporter(BaseExporter):
     """Factory class to create V1CompatibleWandbExporter instances.
 
     This class provides a unified interface for creating v1-compatible wandb exporters
     that can work with either sync or async modes.
     """
 
-    def __init__(self, one_logger_config: OneLoggerConfig, async_mode: bool = False):
+    def __init__(self, one_logger_config: OneLoggerConfig, config: Dict[str, Any]):
         """Initialize the V1CompatibleExporter.
 
         Args:
             one_logger_config: The OneLogger configuration.
-            async_mode: If True, creates an async exporter. If False, creates a sync exporter.
+            config: Configuration dictionary for the exporter.
         """
+        super().__init__()
         self._one_logger_config = one_logger_config
-        self._async_mode = async_mode
+        self._config = config
 
-        # Create the appropriate exporter config using v1-style configuration
+        # Extract async_mode from config
+        self._async_mode = config.get("async_mode", False)
+
+        # Create the appropriate exporter config using the provided config
         self._exporter_config = WandBConfig(
-            host="https://api.wandb.ai",
-            api_key="",
-            project=one_logger_config.application_name,
-            run_name=f"{one_logger_config.application_name}-run-{str(uuid.uuid4())}",
-            entity="hwinf_dcm",  # NOTE: should always be 'hwinf_dcm' for internal user.
-            tags=["e2e_metrics_enabled"],
-            save_dir="./wandb",
+            host=config.get("host"),
+            api_key=config.get("api_key", ""),
+            project=config.get("project", one_logger_config.application_name),
+            run_name=config.get("run_name", f"{one_logger_config.application_name}-run-{str(uuid.uuid4())}"),
+            entity=config.get("entity"),
+            tags=config.get("tags"),
+            save_dir=config.get("save_dir"),
         )
 
         # Create the appropriate exporter based on async mode
-        if async_mode:
+        if self._async_mode:
             self._exporter = V1CompatibleWandbExporterAsync(
                 one_logger_config=one_logger_config,
                 wandb_config=self._exporter_config,
@@ -644,3 +649,45 @@ class V1CompatibleExporter:
     def is_async(self):
         """Check if the exporter is in async mode."""
         return self._async_mode
+
+    @override
+    def initialize(self) -> None:
+        """Initialize the exporter."""
+        if hasattr(self._exporter, "initialize"):
+            self._exporter.initialize()
+
+    @override
+    def export_start(self, span: Span) -> None:
+        """Export a newly started span."""
+        if hasattr(self._exporter, "export_start"):
+            self._exporter.export_start(span)
+
+    @override
+    def export_stop(self, span: Span) -> None:
+        """Export a stopped/finished span."""
+        if hasattr(self._exporter, "export_stop"):
+            self._exporter.export_stop(span)
+
+    @override
+    def export_event(self, event: Event, span: Span) -> None:
+        """Export an event that occurred for an active span."""
+        if hasattr(self._exporter, "export_event"):
+            self._exporter.export_event(event, span)
+
+    @override
+    def export_error(self, event: ErrorEvent, span: Span) -> None:
+        """Export an error event that occurred for an active span."""
+        if hasattr(self._exporter, "export_error"):
+            self._exporter.export_error(event, span)
+
+    @override
+    def export_telemetry_data_error(self, error: TelemetryDataError) -> None:
+        """Export a telemetry data error."""
+        if hasattr(self._exporter, "export_telemetry_data_error"):
+            self._exporter.export_telemetry_data_error(error)
+
+    @override
+    def close(self) -> None:
+        """Shut down the exporter."""
+        if hasattr(self._exporter, "close"):
+            self._exporter.close()

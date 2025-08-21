@@ -120,7 +120,7 @@ class ExporterConfigManager:
                         definitions. Each exporter in the configuration must have a
                         valid class_name that can be dynamically imported.
                 training_telemetry_config: Optional training telemetry configuration that
-                        will be passed to exporters that require it (e.g., V1CompatibleExporter).
+                        may be passed to exporters that require it.
 
         Returns:
                 List[Exporter]: A list of created exporter instances. The list may

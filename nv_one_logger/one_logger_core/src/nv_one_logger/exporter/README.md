@@ -253,7 +253,7 @@ File discovery order:
 ### Package‑provided configs (entry points)
 Packages can expose default exporter configs using the entry point group `nv_one_logger.exporter_configs`.
 
-`setup.py`:
+**Using setup.py:**
 ```python
 from setuptools import setup, find_packages
 
@@ -268,6 +268,29 @@ setup(
     },
     install_requires=["nv-one-logger-core"],
 )
+```
+
+**Using pyproject.toml (Poetry):**
+```toml
+[tool.poetry]
+name = "my-team-exporter-config"
+version = "0.1.0"
+description = "My team's exporter configuration"
+authors = ["Your Name <your.email@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+nv-one-logger-core = "^2.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.plugins."nv_one_logger.exporter_configs"]
+my_file_exporter = "my_team_exporter_config.configs:MyFileExporterConfig"
 ```
 
 `configs.py`:

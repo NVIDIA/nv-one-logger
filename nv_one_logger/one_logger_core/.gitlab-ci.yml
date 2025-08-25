@@ -87,7 +87,7 @@ core-unit-tests:
 core-pages:
   stage: doc
   needs: [core-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
-  image: python:3.10
+  image: python:3.8
   script:
     - pip install -U sphinx
     - cd nv_one_logger/one_logger_core

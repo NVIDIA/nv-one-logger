@@ -20,13 +20,13 @@ PYTHON3 := $(shell which python3)
 # Get the Python version
 PYTHON_VERSION := $(shell $(PYTHON3) --version | awk '{print $$2}')
 
-
-
 TOOL_NAME := one_logger_otel
 RELEASE_API_URL := https://gitlab-master.nvidia.com/api/v4/projects/108141/releases
 GIT_URL := https://gitlab-master.nvidia.com/hwinf-dcm/nv-one-logger.git
 CODE_DIR := $(CWD)/src
 TEST_DIR := $(CWD)/tests
+CORE_DIR := $(abspath $(CWD)/../one_logger_core)
+TEST_VENV := $(CWD)/.venv-test
 
 TOOL_NAME_UC := $(shell echo $(TOOL_NAME) | tr  '[:lower:]' '[:upper:]')
 TOOL_VERSION_ENV := $(TOOL_NAME_UC)_VERSION
@@ -50,13 +50,13 @@ endif
 ifdef ${TOOL_VERSION_ENV}
 	NEXT_GIT_TAG_VER := $(subst v,,${$(TOOL_VERSION_ENV)})
 else
-	NEXT_GIT_TAG_VER := $(shell $(CWD)/.venv/bin/python-semantic-release version --print)
+	NEXT_GIT_TAG_VER := $(shell if [ -x "$(CWD)/.venv/bin/python-semantic-release" ]; then "$(CWD)/.venv/bin/python-semantic-release" version --print; else echo "0.0.0"; fi)
 endif
 
 
 .PHONY: check
-check: venv
-	@echo "---------------------checking--------------------------";
+check: venv-test
+	@echo "---------------------checking (poetry venv with local core)--------------------------";
 	$(POETRY_BIN) run black --check $(CODE_DIR) $(TEST_DIR)
 	$(POETRY_BIN) run isort --check-only $(CODE_DIR) $(TEST_DIR)
 	$(POETRY_BIN) run flake8 $(CODE_DIR) $(TEST_DIR)
@@ -76,19 +76,36 @@ venv:
 	$(POETRY_BIN) install  
 	@echo ---------------------poetry install end-----------------------
 
+.PHONY: venv-test
+venv-test:
+	@echo "---------------------preparing poetry venv with local core--------------------------";
+	@echo "Poetry version: $$($(POETRY_BIN) --version)"
+	$(POETRY_BIN) env use $(PYTHON3)
+	@echo "---------------------installing poetry-plugin-export--------------------------";
+	$(POETRY_BIN) run pip install poetry-plugin-export
+	@echo "---------------------building local nv-one-logger-core wheel--------------------------";
+	$(POETRY_BIN) -C $(CORE_DIR) build
+	@echo "---------------------exporting requirements (dev), filtering out core--------------------------";
+	$(POETRY_BIN) export -f requirements.txt --with dev --without-hashes -o /tmp/req.txt
+	grep -Ev '^nv-one-logger-core(\b|[=<>])' /tmp/req.txt > /tmp/req.filtered.txt || true
+	@echo "---------------------installing deps into poetry venv via pip--------------------------";
+	$(POETRY_BIN) run python -m pip install --upgrade pip setuptools wheel
+	$(POETRY_BIN) run pip install -r /tmp/req.filtered.txt
+	$(POETRY_BIN) run pip install --no-deps $(CORE_DIR)/dist/nv_one_logger_core-*.whl
+	$(POETRY_BIN) run pip install .
 
 # Clean up cache and venv
 .PHONY: clean
 clean:
 	@echo "---------------------Cleaning--------------------------";
-	rm -rf $(CWD)/.cache $(CWD)/.venv $(CWD)/.coverage $(CWD)/.mypy_cache $(CWD)/.pytest_cache $(CWD)/htmlcov
+	rm -rf $(CWD)/.cache $(CWD)/.venv $(CWD)/.venv-test $(CWD)/.coverage $(CWD)/.mypy_cache $(CWD)/.pytest_cache $(CWD)/htmlcov
 
 .PHONY: test
 test: unit
 
 .PHONY: unit
-unit: clean venv
-	@echo ---------------------Running unit tests------------------------
+unit: clean venv-test
+	@echo "---------------------Running unit tests (poetry venv with local core)------------------------"
 	$(POETRY_BIN) run coverage run --branch  -m pytest
 	$(POETRY_BIN) run coverage report -m
 

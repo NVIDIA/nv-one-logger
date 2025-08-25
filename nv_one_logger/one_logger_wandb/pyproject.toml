@@ -13,7 +13,7 @@ python = "^3.8"
 StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python requirement to >= 3.11
 wandb = "^0.20.1"
 typing-extensions = "^4.13.2"
-nv-one-logger-core = {path = "../one_logger_core", develop = true}
+nv-one-logger-core = {version = "^2.1.0", source = "mlwfo-staging-pypi"}
 
 
 

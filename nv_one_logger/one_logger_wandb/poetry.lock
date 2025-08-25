@@ -974,20 +974,23 @@ name = "nv-one-logger-core"
 version = "2.1.0"
 description = "Extensions to onelogger library to use Open telemetry (OTEL) as a backend."
 optional = false
-python-versions = "^3.8"
-files = []
-develop = true
+python-versions = ">=3.8,<4.0"
+files = [
+    {file = "nv_one_logger_core-2.1.0-py3-none-any.whl", hash = "sha256:9638de0b92ea56e0657220e783c62a492c96cb84d6de70a0a412bf46b28bdc5d"},
+    {file = "nv_one_logger_core-2.1.0.tar.gz", hash = "sha256:4ed182d726e2332d2bce3831dd87378d00b0b2f770ac688302b3707cd13b546f"},
+]
 
 [package.dependencies]
-overrides = "^7.7.0"
-pydantic = "^2.10.6"
-StrEnum = "^0.4.0"
-toml = "^0.10.2"
-typing-extensions = "^4.13.2"
+overrides = ">=7.7.0,<8.0.0"
+pydantic = ">=2.10.6,<3.0.0"
+StrEnum = ">=0.4.0,<0.5.0"
+toml = ">=0.10.2,<0.11.0"
+typing-extensions = ">=4.13.2,<5.0.0"
 
 [package.source]
-type = "directory"
-url = "../one_logger_core"
+type = "legacy"
+url = "https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/simple"
+reference = "mlwfo-staging-pypi"
 
 [[package]]
 name = "overrides"
@@ -2205,4 +2208,4 @@ reference = "nv-shared-pypi"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "672e44ef13ffb02f5974d6539444aa750e14ff70834f17aace2f68d006c44091"
+content-hash = "3f762c9734115253764eeab0605305851cd5a39c846bb197349635077935ec80"

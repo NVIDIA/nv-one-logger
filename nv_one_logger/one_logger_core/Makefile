@@ -20,8 +20,6 @@ PYTHON3 := $(shell which python3)
 # Get the Python version
 PYTHON_VERSION := $(shell $(PYTHON3) --version | awk '{print $$2}')
 
-
-
 TOOL_NAME := one_logger_core
 RELEASE_API_URL := https://gitlab-master.nvidia.com/api/v4/projects/108141/releases
 GIT_URL := https://gitlab-master.nvidia.com/hwinf-dcm/nv-one-logger.git

@@ -2,7 +2,7 @@
 
 from concurrent.futures import Future
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import pytorch_lightning as ptl
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
@@ -229,7 +229,7 @@ if _augmented_async_checkpoint_io_enabled:  # noqa: C901
                 checkpoint_io (Optional[CheckpointIO]): A checkpoint IO plugin that is used as the basis for async checkpointing.
             """
             super().__init__(checkpoint_io)
-            self._futures: dict[int, Future[None]] = {}
+            self._futures: Dict[int, Future] = {}
 
         @override
         def save_checkpoint(self, *args: Any, **kwargs: Any) -> None:
@@ -274,8 +274,8 @@ if _augmented_async_checkpoint_io_enabled:  # noqa: C901
 
 
 def hook_trainer_cls(
-    cls: type[Trainer], training_telemetry_provider: TrainingTelemetryProvider, telemetry_callback: Optional[TimeEventCallback] = None
-) -> tuple[type[Trainer], TimeEventCallback]:
+    cls: Type[Trainer], training_telemetry_provider: TrainingTelemetryProvider, telemetry_callback: Optional[TimeEventCallback] = None
+) -> Tuple[Type[Trainer], TimeEventCallback]:
     """Wrap certain methods of the trainer class to add telemetry hooks.
 
     Args:

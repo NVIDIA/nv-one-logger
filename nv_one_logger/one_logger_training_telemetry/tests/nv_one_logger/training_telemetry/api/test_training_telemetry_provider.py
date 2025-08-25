@@ -873,7 +873,11 @@ class TestTrainingTelemetryProviderSetTrainingTelemetryConfig:
         from importlib.metadata import entry_points
 
         # Test 1: Verify that entry points discovery works
-        entry_points_list = list(entry_points(group="nv_one_logger.exporter_configs"))
+        eps = entry_points()
+        try:
+            entry_points_list = list(eps.select(group="nv_one_logger.exporter_configs"))  # python 3.9+
+        except AttributeError:
+            entry_points_list = list(eps.get("nv_one_logger.exporter_configs", []))  # python 3.8
 
         # The number of entry points depends on what's installed, but the mechanism should work
         print(f"Found {len(entry_points_list)} exporter config entry points")

@@ -20,10 +20,7 @@ PYTHON3 := $(shell which python3)
 # Get the Python version
 PYTHON_VERSION := $(shell $(PYTHON3) --version | awk '{print $$2}')
 
-# Check if Python version is > 3.10.x, if not, fail the makefile
-ifeq ($(shell echo $(PYTHON_VERSION) | grep -E '^3\.(10|[1-9][0-9]*)\.'),)
-    $(error Python version is less than 3.10. Found $(PYTHON_VERSION), exiting...)
-endif
+
 
 TOOL_NAME := one_logger_core
 RELEASE_API_URL := https://gitlab-master.nvidia.com/api/v4/projects/108141/releases

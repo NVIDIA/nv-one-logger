@@ -3,7 +3,7 @@
 
 import os
 import shutil
-from typing import Any, Generator
+from typing import Any, Dict, Generator, Tuple
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -48,7 +48,7 @@ class DummyModel(LightningModule):
         """
         return self.linear(x)
 
-    def training_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
         """Training step for the model.
 
         Args:
@@ -63,7 +63,7 @@ class DummyModel(LightningModule):
         loss = torch.nn.functional.mse_loss(y_hat, y)
         return loss
 
-    def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
+    def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Validate the model.
 
         Args:
@@ -134,7 +134,7 @@ def configure_provider(config: OneLoggerConfig, mock_exporter: Exporter) -> None
 
 
 @pytest.fixture
-def dummy_data() -> tuple[DataLoader[tuple[torch.Tensor, torch.Tensor]], DataLoader[tuple[torch.Tensor, torch.Tensor]]]:
+def dummy_data() -> Tuple[DataLoader[Tuple[torch.Tensor, torch.Tensor]], DataLoader[Tuple[torch.Tensor, torch.Tensor]]]:
     """Create dummy training and validation data loaders.
 
     Returns:
@@ -175,7 +175,7 @@ def test_one_logger_ptl_trainer(
     config: OneLoggerConfig,
     use_hook_trainer_cls: bool,
     dummy_model: DummyModel,
-    dummy_data: tuple[DataLoader[tuple[torch.Tensor, torch.Tensor]], DataLoader[tuple[torch.Tensor, torch.Tensor]]],
+    dummy_data: Tuple[DataLoader[Tuple[torch.Tensor, torch.Tensor]], DataLoader[Tuple[torch.Tensor, torch.Tensor]]],
     checkpoints_dir: str,
 ) -> None:
     """Tests PTL integration and verifies that supported telemetry callbacks are called implicitly.
@@ -203,7 +203,7 @@ def test_one_logger_ptl_trainer(
         save_top_k=-1,
         dirpath=checkpoints_dir,
     )
-    trainer_config: dict[str, Any] = {
+    trainer_config: Dict[str, Any] = {
         "max_epochs": NUM_EPOCHS,
         "limit_train_batches": NUM_TRAIN_BATCHES,
         "limit_val_batches": NUM_VAL_BATCHES,
@@ -214,22 +214,30 @@ def test_one_logger_ptl_trainer(
     original_init = Trainer.__init__
     original_save_checkpoint = Trainer.save_checkpoint
 
-    # Mock all the callback functions
-    with (
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_app_start") as mock_app_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_app_end") as mock_app_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_save_checkpoint_start") as mock_save_checkpoint_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_save_checkpoint_success") as mock_save_checkpoint_success,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_save_checkpoint_end") as mock_save_checkpoint_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_train_start") as mock_train_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_train_end") as mock_train_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_training_single_iteration_start") as mock_train_iter_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_training_single_iteration_end") as mock_train_iter_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_start") as mock_val_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_end") as mock_val_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_single_iteration_start") as mock_val_iter_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_single_iteration_end") as mock_val_iter_end,
-    ):
+    # Mock all the callback functions (Python 3.8-compatible multi-context manager syntax)
+    with patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_app_start") as mock_app_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_app_end"
+    ) as mock_app_end, patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_save_checkpoint_start") as mock_save_checkpoint_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_save_checkpoint_success"
+    ) as mock_save_checkpoint_success, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_save_checkpoint_end"
+    ) as mock_save_checkpoint_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_train_start"
+    ) as mock_train_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_train_end"
+    ) as mock_train_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_training_single_iteration_start"
+    ) as mock_train_iter_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_training_single_iteration_end"
+    ) as mock_train_iter_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_start"
+    ) as mock_val_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_end"
+    ) as mock_val_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_single_iteration_start"
+    ) as mock_val_iter_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_single_iteration_end"
+    ) as mock_val_iter_end:
         if use_hook_trainer_cls:
             if checkpoint_strategy == CheckPointStrategy.SYNC:
                 HookedTrainer, telemetry_callback = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
@@ -291,7 +299,7 @@ def test_explicit_telemetry_callback_invocation(
         use_hook_trainer_cls (bool): Whether to use the hook_trainer_cls function to patch the Trainer class or use
         the OneLoggerPTLTrainer class directly.
     """
-    trainer_config: dict[str, Any] = {
+    trainer_config: Dict[str, Any] = {
         "max_epochs": 5,
         "limit_train_batches": 4,
         "limit_val_batches": 3,
@@ -301,20 +309,26 @@ def test_explicit_telemetry_callback_invocation(
     original_init = Trainer.__init__
     original_save_checkpoint = Trainer.save_checkpoint
 
-    # Mock all the callback functions
-    with (
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_app_end") as mock_app_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_testing_start") as mock_testing_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_testing_end") as mock_testing_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_dataloader_init_start") as mock_dataloader_init_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_dataloader_init_end") as mock_dataloader_init_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_model_init_start") as mock_model_init_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_model_init_end") as mock_model_init_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_optimizer_init_start") as mock_optimizer_init_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_optimizer_init_end") as mock_optimizer_init_end,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_load_checkpoint_start") as mock_load_checkpoint_start,
-        patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_load_checkpoint_end") as mock_load_checkpoint_end,
-    ):
+    # Mock all the callback functions (Python 3.8-compatible multi-context manager syntax)
+    with patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_app_end") as mock_app_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_testing_start"
+    ) as mock_testing_start, patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_testing_end") as mock_testing_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_dataloader_init_start"
+    ) as mock_dataloader_init_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_dataloader_init_end"
+    ) as mock_dataloader_init_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_model_init_start"
+    ) as mock_model_init_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_model_init_end"
+    ) as mock_model_init_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_optimizer_init_start"
+    ) as mock_optimizer_init_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_optimizer_init_end"
+    ) as mock_optimizer_init_end, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_load_checkpoint_start"
+    ) as mock_load_checkpoint_start, patch(
+        "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_load_checkpoint_end"
+    ) as mock_load_checkpoint_end:
         if use_hook_trainer_cls:
             HookedTrainer, telemetry_callback = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
             trainer = HookedTrainer(**trainer_config)
@@ -359,7 +373,7 @@ def test_explicit_telemetry_callback_invocation(
 
 @pytest.mark.parametrize("config", [CheckPointStrategy.SYNC], indirect=True, ids=["sync"])
 def test_on_validation_batch_start_auto_end_previous_validation_single_iteration(
-    dummy_data: tuple[DataLoader[tuple[torch.Tensor, torch.Tensor]], DataLoader[tuple[torch.Tensor, torch.Tensor]]],
+    dummy_data: Tuple[DataLoader[Tuple[torch.Tensor, torch.Tensor]], DataLoader[Tuple[torch.Tensor, torch.Tensor]]],
 ) -> None:
     """Test auto calling on_validation_batch_end when validation_step returns None.
 

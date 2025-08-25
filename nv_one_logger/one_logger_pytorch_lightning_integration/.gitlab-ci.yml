@@ -16,10 +16,10 @@ ptl-int-build-prod-job:
     - merged
     - main
   image: 
-    name: python:3.10
+    name: python:3.8
   before_script:
     - echo "installing poetry."
-    - pip install poetry==2.0.1 wheel
+    - pip install poetry>=1.8 wheel
     - echo "installing jq."
     - apt-get -qq update
     - apt-get install -y jq
@@ -45,10 +45,10 @@ ptl-int-build-staging-job:
     - merged
     - develop
   image: 
-    name: python:3.10
+    name: python:3.8
   before_script:
     - echo "installing poetry."
-    - pip install poetry==2.0.1 wheel
+    - pip install poetry>=1.8 wheel
     - echo "installing jq."
     - apt-get -qq update
     - apt-get install -y jq
@@ -71,14 +71,14 @@ ptl-int-unit-tests:
   stage: test
   coverage: '/TOTAL.*\s+(\d+%)$/'
   image: 
-    name: python:3.10
+    name: python:3.8
   before_script:
   script:
     - echo "setting up PYTHONPATH for all nv-one-logger packages"
     - export PYTHONPATH="${CI_PROJECT_DIR}/nv_one_logger/one_logger_core/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_training_telemetry/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_wandb/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_otel/src:${CI_PROJECT_DIR}/nv_one_logger/one_logger_pytorch_lightning_integration/src:${PYTHONPATH}"
     - echo "PYTHONPATH set to ${PYTHONPATH}"
     - echo "installing poetry."
-    - pip install poetry==2.0.1 wheel
+    - pip install poetry>=1.8 wheel
     - cd nv_one_logger/one_logger_pytorch_lightning_integration
     - echo "checking lint/format."
     - make check

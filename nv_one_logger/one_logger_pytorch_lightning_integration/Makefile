@@ -20,8 +20,6 @@ PYTHON3 := $(shell which python3)
 # Get the Python version
 PYTHON_VERSION := $(shell $(PYTHON3) --version | awk '{print $$2}')
 
-
-
 TOOL_NAME := one_logger_pytorch_lightning_integration
 RELEASE_API_URL := https://gitlab-master.nvidia.com/api/v4/projects/108141/releases
 GIT_URL := https://gitlab-master.nvidia.com/hwinf-dcm/nv-one-logger.git
@@ -50,13 +48,13 @@ endif
 ifdef ${TOOL_VERSION_ENV}
 	NEXT_GIT_TAG_VER := $(subst v,,${$(TOOL_VERSION_ENV)})
 else
-	NEXT_GIT_TAG_VER := $(shell $(CWD)/.venv/bin/python-semantic-release version --print)
+	NEXT_GIT_TAG_VER := $(shell if [ -x "$(CWD)/.venv/bin/python-semantic-release" ]; then "$(CWD)/.venv/bin/python-semantic-release" version --print; else echo "0.0.0"; fi)
 endif
 
 
 .PHONY: check
-check: venv
-	@echo "---------------------checking--------------------------";
+check: venv-test
+	@echo "---------------------checking (poetry venv with local wheels)--------------------------";
 	$(POETRY_BIN) run black --check $(CODE_DIR) $(TEST_DIR)
 	$(POETRY_BIN) run isort --check-only $(CODE_DIR) $(TEST_DIR)
 	$(POETRY_BIN) run flake8 $(CODE_DIR) $(TEST_DIR)
@@ -76,6 +74,24 @@ venv:
 	$(POETRY_BIN) install  
 	@echo ---------------------poetry install end-----------------------
 
+.PHONY: venv-test
+venv-test:
+	@echo "---------------------preparing poetry venv with local core+tt wheels--------------------------";
+	$(POETRY_BIN) env use $(PYTHON3)
+	@echo "---------------------installing poetry-plugin-export--------------------------";
+	$(POETRY_BIN) run pip install poetry-plugin-export
+	@echo "---------------------building local wheels (core, training_telemetry)--------------------------";
+	$(POETRY_BIN) -C $(CWD)/../one_logger_core build
+	$(POETRY_BIN) -C $(CWD)/../one_logger_training_telemetry build
+	@echo "---------------------exporting requirements (with dev), filtering out internal deps--------------------------";
+	$(POETRY_BIN) export -f requirements.txt --with dev --without-hashes -o /tmp/req.txt
+	grep -Ev '^(nv-one-logger-core|nv-one-logger-training-telemetry)(\b|[=<>])' /tmp/req.txt > /tmp/req.filtered.txt || true
+	@echo "---------------------installing deps into poetry venv via pip--------------------------";
+	$(POETRY_BIN) run python -m pip install --upgrade pip setuptools wheel
+	$(POETRY_BIN) run pip install -r /tmp/req.filtered.txt
+	$(POETRY_BIN) run pip install --no-deps $(CWD)/../one_logger_core/dist/nv_one_logger_core-*.whl $(CWD)/../one_logger_training_telemetry/dist/nv_one_logger_training_telemetry-*.whl
+	$(POETRY_BIN) run pip install .
+
 
 # Clean up cache and venv
 .PHONY: clean
@@ -87,8 +103,8 @@ clean:
 test: unit
 
 .PHONY: unit
-unit: clean venv
-	@echo ---------------------Running unit tests------------------------
+unit: clean venv-test
+	@echo "---------------------Running unit tests (poetry venv with local wheels)------------------------"
 	$(POETRY_BIN) run coverage run --branch  -m pytest
 	$(POETRY_BIN) run coverage report -m
 

@@ -215,7 +215,16 @@ class TestExporterConfigManager:
                 mock_entry.name = name
                 mock_entry.load.return_value = config_class
                 mock_entries.append(mock_entry)
-            mock_entry_points.return_value = mock_entries
+
+            # Mock entry_points() to return a dict-like object (Python 3.8-3.9 style)
+            # Create a simple class that behaves like the real entry_points() result
+            class MockEntryPoints:
+                def get(self, group_name, default=None):
+                    if group_name == "nv_one_logger.exporter_configs":
+                        return mock_entries
+                    return default or []
+
+            mock_entry_points.return_value = MockEntryPoints()
 
             # Create a fresh manager instance with mocked entry points
             manager = ExporterConfigManager()
@@ -450,9 +459,17 @@ class TestExporterConfigManager:
             mock_entry.load.return_value = config_class
             mock_entries.append(mock_entry)
 
+        # Mock entry_points() to return a dict-like object (Python 3.8-3.9 style)
+        # Create a simple class that behaves like the real entry_points() result
+        class MockEntryPoints:
+            def get(self, group_name, default=None):
+                if group_name == "nv_one_logger.exporter_configs":
+                    return mock_entries
+                return default or []
+
         with patch(
             "nv_one_logger.exporter.export_config_manager.entry_points",
-            return_value=mock_entries,
+            return_value=MockEntryPoints(),
         ):
             # Create manager instance with package configs
             manager = ExporterConfigManager()

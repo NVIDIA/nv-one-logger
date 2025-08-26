@@ -156,7 +156,20 @@ class ExporterConfigManager:
         """Load exporter configurations from entry points (package/team configs)."""
         configs = {}
         try:
-            for entry_point in entry_points(group=self.ENTRY_POINT_NAME):
+            # Python 3.8 compatibility: entry_points() doesn't support group parameter
+            # Use dictionary-style access instead
+            eps = entry_points()
+            if hasattr(eps, "select"):
+                # Python 3.10+ style
+                entry_points_group = eps.select(group=self.ENTRY_POINT_NAME)
+            elif hasattr(eps, "get"):
+                # Python 3.8-3.9 style - returns dict-like object
+                entry_points_group = eps.get(self.ENTRY_POINT_NAME, [])
+            else:
+                # Fallback: empty list if entry_points() returns unexpected format
+                entry_points_group = []
+
+            for entry_point in entry_points_group:
                 try:
                     config_class = entry_point.load()
                     configs[entry_point.name] = config_class

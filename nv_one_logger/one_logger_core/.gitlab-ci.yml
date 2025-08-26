@@ -19,7 +19,7 @@ core-build-prod-job:
     name: python:3.8
   before_script:
     - echo "installing poetry."
-    - pip install poetry>=1.8 wheel
+    - pip install poetry==1.8.5 wheel
     - echo "installing jq."
     - apt-get -qq update
     - apt-get install -y jq
@@ -30,9 +30,11 @@ core-build-prod-job:
     - echo "setting Git token and Repo path"
     - export GH_TOKEN=$CI_REGISTRY_USER:$CI_JOB_TOKEN
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/"
+    - export E2E_PYTHON_REPO_USER=$ARTIFACTORY_USERNAME
+    - export E2E_PYTHON_REPO_PASSWORD=$ARTIFACTORY_PROD_TOKEN
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - make ci_release
+    - make ci_tag
     - echo "making publish"
     - make publish
   tags:
@@ -48,7 +50,7 @@ core-build-staging-job:
     name: python:3.8
   before_script:
     - echo "installing poetry."
-    - pip install poetry>=1.8 wheel
+    - pip install poetry==1.8.5 wheel
     - echo "installing jq."
     - apt-get -qq update
     - apt-get install -y jq
@@ -59,9 +61,11 @@ core-build-staging-job:
     - echo "setting Git token and Repo path"
     - export GH_TOKEN=$CI_REGISTRY_USER:$CI_JOB_TOKEN
     - export E2E_PYTHON_REPO="https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/"
+    - export E2E_PYTHON_REPO_USER=$ARTIFACTORY_USERNAME
+    - export E2E_PYTHON_REPO_PASSWORD=$ARTIFACTORY_STAGING_TOKEN
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - make ci_release
+    - make ci_tag
     - echo "making publish"
     - make publish
   tags:
@@ -75,7 +79,7 @@ core-unit-tests:
   before_script:
   script:
     - echo "installing poetry."
-    - pip install poetry>=1.8 wheel
+    - pip install poetry==1.8.5 wheel
     - cd nv_one_logger/one_logger_core 
     - echo "checking lint/format."
     - make check

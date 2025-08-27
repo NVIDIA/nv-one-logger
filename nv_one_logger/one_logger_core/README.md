@@ -2,7 +2,7 @@
 
 ## Summary
 
-This Python project contains the API and libraries for One Logger: A library for collecting telemetry information from jobs.
+This Python project contains the API and libraries for OneLogger: A library for collecting telemetry information from jobs.
 
 The following are the dependency rules for various packages (which we will enforce by creating separate python projects in the end state):
 
@@ -28,7 +28,7 @@ We have defined our abstractions based on open telemetry concepts.
   - Filter (not export) certain events (based on attribute values or verbosity).
   - Add new attributes to a span or events or even create new events. For example, if you have a long-running span for model training in which multiple "save checkpoint" events are emitted, and you want to keep track of the avg, max, and min save times across all the checkpoints, the recorder can keep track of all "save checkpoint" events so far and maintain avg, max, and min values of the "duration" attribute of those events and then emit a "check point stats update" event periodically.
 
-## How to use One Logger
+## How to use OneLogger
 
 There are 3 options for colleting telemetry information from applications (including long-running jobs such as ML training):
 
@@ -108,7 +108,7 @@ One Logger provides a flexible exporter configuration system that allows you to 
 
 While we could have used Python classes defined in the OpenTelemetry API (such as Span, Attribute, etc.) instead of creating our own classes, this would force any application using our core library to depend on both the OpenTelemetry API and SDK (the latter is needed in the bootstrap code that creates a provider object for creation of spans). This dependency requirement could potentially conflict with the application's existing dependencies or create unnecessary constraints (e.g., when an application already depends on a different version of OpenTelemetry SDK for its own instrumentation needs. A similar problem can happen with conflicting transitive dependencies).
 
-This design decision means applications can use our core library without worrying about OpenTelemetry dependency conflicts, while still benefiting from OpenTelemetry-compatible instrumentation patterns. Users who would like to use OpenTelemetry collectors as their backend, can easily map the data to OpenTelemetry Python classes in the "backend" class.
+This design decision means applications can use our core library without worrying about OpenTelemetry dependency conflicts, while still benefiting from OpenTelemetry-compatible instrumentation patterns. Users who would like to export data to OpenTelemetry collectors can easily map the data to OpenTelemetry Python classes in the appropriate Exporter implementation.
 
 ## Dealing with Telemetry Failures
 

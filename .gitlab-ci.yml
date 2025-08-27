@@ -4,29 +4,11 @@ stages:
   - doc
   - build_deploy
 
-
+# Gitlab CI does not support check all commits in a merge request to trigger a `include` job.
+# So we need to include all the CI files for each submodule.
 include:
   - local: 'nv_one_logger/one_logger_core/.gitlab-ci.yml'
-    # rules:
-    #   - changes:
-    #     - 'one_logger_core/*'
   - local: 'nv_one_logger/one_logger_training_telemetry/.gitlab-ci.yml'
-  #   # rules:
-  #   #   - changes:
-  #   #     - 'one_logger_core/*'
-  #   #     - 'one_logger_training_telemetry/*'
   - local: 'nv_one_logger/one_logger_otel/.gitlab-ci.yml'
-  #   # rules:
-  #   #   - changes:
-  #   #     - 'one_logger_core/*'
-  #   #     - 'one_logger_otel/*'
   - local: 'nv_one_logger/one_logger_wandb/.gitlab-ci.yml'
-  #   # rules:
-  #   #   - changes:
-  #   #     - 'one_logger_core/*'
-  #   #     - 'one_logger_wandb/*'
   - local: 'nv_one_logger/one_logger_pytorch_lightning_integration/.gitlab-ci.yml'
-  #   # rules:
-  #   #   - changes:
-  #   #     - 'one_logger_core/*'
-  #   #     - 'one_logger_pytorch_lightning_integration/*'

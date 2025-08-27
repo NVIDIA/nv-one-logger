@@ -280,7 +280,7 @@ authors = ["Your Name <your.email@example.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-nv-one-logger-core = "^2.1.0"
+nv-one-logger-core = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"

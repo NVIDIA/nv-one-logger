@@ -102,6 +102,4 @@ PyTorch Lightning integration package that:
 
 ## Dev Guidance
 
-### Release the binary to pypi
-1. Make sure the env var `E2E_PYTHON_REPO`, `E2E_PYTHON_REPO_USER`, `E2E_PYTHON_REPO_PASSWORD` are populated.
-2. run `make publish` in each sub module directory.
+Note for NVIDIAN dev, please check the confluence page [Dev guidance on nv-one-logger](https://confluence.nvidia.com/display/MLWFO/Dev+guidance+on+nv-one-logger).

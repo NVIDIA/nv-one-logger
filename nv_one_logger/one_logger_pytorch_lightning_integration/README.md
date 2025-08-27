@@ -4,9 +4,7 @@ The integration works by using [Lightning's callback ](https://lightning.ai/docs
 Given that the Lightning's callback API doesn't support everything we need, the _one_logger_pytorch_lightning_integration_ library supplements
 the Lightning callback mechanism to ensure we support async checkpointing and some app lifecycle events not supported by Lightning callback API.
 
-There are two approaches to integrate your PyTorch Lightning application with nv-one-logger:
-
-## Option 1: hook_trainer_cls
+## Integrate nv-one-logger to PTL application via hook_trainer_cls
 
  `hook_trainer_cls` adds telemetry hooks to your [Trainer](https://lightning.ai/docs/pytorch/stable/common/trainer.html). 
  Using this method, several of the training events will be automatically captured. However, you still need to explicitly call the one logger API for other events. See [explicit vs implicit](#explicit-vs-implicit) section for more details.
@@ -36,37 +34,6 @@ There are two approaches to integrate your PyTorch Lightning application with nv
     # Note that nv_one_logger_callback == trainer.nv_one_logger_callback
     
     nv_one_logger_callback.on_app_end()
-```
-
-## Option 2: OneLoggerPTLTrainer
-
-With this approach, you will use `OneLoggerPTLTrainer`, which is a subclass of the [Lightning Trainer](https://lightning.ai/docs/pytorch/stable/common/trainer.html).
-Using this method, several of the training events will be automatically captured. However, you still need to explicitly call the one logger API for other events. 
-See [Explicit vs Implicit Telemetry Event Collection](#explicit-vs-implicit-telemetry-collection) section for more details.
-
-```python
-    TrainingTelemetryProvider.instance().with_base_config(config).with_exporter(exporter).configure_provider()
-    ....
-    trainer = OneLoggerPTLTrainer(
-        trainer_config= {
-            "max_epochs": NUM_EPOCHS,
-            "limit_train_batches": NUM_TRAIN_BATCHES,
-            "limit_val_batches": NUM_VAL_BATCHES,
-            "devices": NUM_DEVICES,
-            # No need to pass one logger callback. This will be added automatically. 
-            # You can pass other callbacks that you need.
-            "callbacks": [...], 
-        },
-        training_telemetry_provider=TrainingTelemetryProvider.instance(),
-    )
-
-    # You can now use the "trainer" instance the same way you use a regular lightning trainer.
-    ...
-    # You can also use the "nv_one_logger_callback" propery of the trainer to invoke on_xxx methods that 
-    # are not part of the Lightning Callback interface such as "on_model_init_start", on_model_init_end, 
-    # on_dataloader_init_start, etc.   
-    nv_one_logger_callback = trainer.nv_one_logger_callback
-    nv_one_logger_cal
 ```
 
 ## Explicit vs Implicit Telemetry Collection
@@ -100,7 +67,6 @@ The table below shows which spans are captured implicitely and which ones requir
 ## Full Example
 
 Below is a simple training application that shows how you can enable telemetry for Loghtning by adding a few lines of code.
-It uses the _hook_trainer_cls_ approach but the same structure works for the _OneLoggerPTLTrainer_ approach too.
 
 ```python
 import os

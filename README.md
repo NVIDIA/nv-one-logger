@@ -11,7 +11,7 @@ This allows us to organize our code in different Python projects with narrow dep
 ```
 nv-one-logger-gitlab/
 ├── nv_one_logger/
-│   ├── one_logger_core/                    # Core logging functionality
+│   ├── one_logger_core/                   # Core logging functionality
 │   │   ├── src/nv_one_logger/             # Source code
 │   │   │   ├── api/                       # Public API interfaces
 │   │   │   ├── core/                      # Core implementations
@@ -21,7 +21,7 @@ nv-one-logger-gitlab/
 │   │   └── pyproject.toml                 # Python project configuration
 │   │
 │   ├── one_logger_otel/                   # OpenTelemetry integration
-│   │   ├── src/nv_one_logger/otel/       # OTEL-specific implementations
+│   │   ├── src/nv_one_logger/otel/        # OTEL-specific implementations
 │   │   │   └── exporter/                  # OTEL exporters
 │   │   ├── tests/                         # OTEL-specific tests
 │   │   └── pyproject.toml
@@ -40,13 +40,13 @@ nv-one-logger-gitlab/
 │   │   └── pyproject.toml
 │   │
 │   └── one_logger_wandb/                  # Weights & Biases integration
-│       ├── src/nv_one_logger/wandb/      # WandB-specific implementations
+│       ├── src/nv_one_logger/wandb/       # WandB-specific implementations
 │       │   └── exporter/                  # WandB exporters
 │       ├── tests/                         # WandB-specific tests
 │       └── pyproject.toml
 │
 ├── third_party_licenses/                  # Third-party license files
-└── README.md                             # This file
+└── README.md                              # This file
 ```
 
 ### Common Project Structure
@@ -56,7 +56,7 @@ Each project follows a consistent structure:
 - `tests/`: Comprehensive test suites with unit and integration tests
 - `pyproject.toml`: Poetry-based project configuration and dependencies
 - `README.md`: Project-specific documentation
-- `conf.py`, `index.rst`, `Makefile`: Sphinx documentation configuration
+- `Makefile`: Automation scripts for common development tasks such as linting, formatting, testing, and publishing
 
 ### Project Descriptions
 
@@ -75,7 +75,7 @@ Machine learning training-specific telemetry package that:
 - Provides specialized APIs for ML training workflows (`api/`)
 - Includes training-specific attributes, events, and spans
 - Offers callbacks and context management for training scenarios
-- Contains examples and documentation for ML use cases (`docs/`)
+- Contains examples for ML use cases (`docs/`)
 
 #### Projects that facilitate using different telemetry backends
 

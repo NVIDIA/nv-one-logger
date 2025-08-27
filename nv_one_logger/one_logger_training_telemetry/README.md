@@ -190,10 +190,6 @@ With this, the library will automatically create several spans, keeps tracks of 
 
 Below, we will go into details for each of the above approaches.
 
-### Integration through a supported framework
-
-TODO: Add later
-
 ### Integration using context managers
 
 Use the context managers defined in `src/one_logger/training_telemetry/api/context.py` to demarcate your main function, training loop, validation loop, etc.

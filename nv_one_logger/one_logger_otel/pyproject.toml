@@ -98,9 +98,6 @@ exclude_lines = [
     "raise ImportError"
 ]
 
-[tool.semantic_release.remote]
-domain = "gitlab-master.nvidia.com"
-
 [[tool.poetry.source]]
 name = "nv-shared-pypi"
 url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi/simple"

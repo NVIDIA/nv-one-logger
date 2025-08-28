@@ -5,7 +5,6 @@ variables:
 
 stages:
   - test
-  - doc
   - build_deploy
 
 ptl-int-build-prod-job:
@@ -87,18 +86,3 @@ ptl-int-unit-tests:
     - make test
   tags:
     - hwinf-mlwfo  # Use runners with this tag
-
-ptl-int-pages:
-  stage: doc
-  needs: [ptl-int-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
-  image: python:3.8
-  script:
-    - pip install -U sphinx
-    - cd nv_one_logger/one_logger_pytorch_lightning_integration
-    - sphinx-build -b html . public
-  artifacts:
-    paths:
-      - one_logger_pytorch_lightning_integration/public
-  tags:
-    - hwinf-mlwfo  # Use runners with this tag
-

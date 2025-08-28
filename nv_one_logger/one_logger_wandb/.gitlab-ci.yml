@@ -5,7 +5,6 @@ variables:
 
 stages:
   - test
-  - doc
   - build_deploy
 
 wandb-build-prod-job:
@@ -87,18 +86,3 @@ wandb-unit-tests:
     - make test
   tags:
     - hwinf-mlwfo  # Use runners with this tag
-
-wandb-pages:
-  stage: doc
-  needs: [wandb-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
-  image: python:3.8
-  script:
-    - pip install -U sphinx
-    - cd nv_one_logger/one_logger_wandb
-    - sphinx-build -b html . public
-  artifacts:
-    paths:
-      - one_logger_wandb/public
-  tags:
-    - hwinf-mlwfo  # Use runners with this tag
-

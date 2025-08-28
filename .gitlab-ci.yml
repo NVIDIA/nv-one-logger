@@ -1,7 +1,6 @@
-
+# This stages should be the union of all stages in all sub-modules.
 stages:
   - test
-  - doc
   - build_deploy
 
 # Gitlab CI does not support check all commits in a merge request to trigger a `include` job.

@@ -87,18 +87,3 @@ telemetry-unit-tests:
     - make test
   tags:
     - hwinf-mlwfo  # Use runners with this tag
-
-telemetry-pages:
-  stage: doc
-  needs: [telemetry-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
-  image: python:3.8
-  script:
-    - pip install -U sphinx
-    - cd nv_one_logger/one_logger_training_telemetry
-    - sphinx-build -b html . public
-  artifacts:
-    paths:
-      - one_logger_training_telemetry/public
-  tags:
-    - hwinf-mlwfo  # Use runners with this tag
-

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nv-one-logger-wandb"
-version = "2.0.1"
+version = "2.0.0"
 description = "Extensions to onelogger library to use Weights and Biases as a backend."
 authors = ["HWInf-MLWFO <HWInf-MLWFO-E2E-Dev@exchange.nvidia.com>"]
 readme = "README.md"

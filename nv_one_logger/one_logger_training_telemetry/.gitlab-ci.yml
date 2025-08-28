@@ -5,7 +5,6 @@ variables:
 
 stages:
   - test
-  - doc
   - build_deploy
 
 telemetry-build-prod-job:

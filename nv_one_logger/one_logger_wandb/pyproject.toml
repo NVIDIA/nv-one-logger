@@ -9,12 +9,15 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+# python version required minimum 3.9 to meet security requirement related to urllib3.
+python = "^3.9"
 StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python requirement to >= 3.11
 wandb = "^0.20.1"
 typing-extensions = "^4.13.2"
 nv-one-logger-core = {version = "^2.0.0", source = "mlwfo-staging-pypi"}
 
+# Required by NSPECT security requirements.
+urllib3 = {version = ">=2.5.0"}
 
 
 [build-system]

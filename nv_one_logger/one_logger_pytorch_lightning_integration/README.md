@@ -4,6 +4,12 @@ The integration works by using [Lightning's callback ](https://lightning.ai/docs
 Given that the Lightning's callback API doesn't support everything we need, the _one_logger_pytorch_lightning_integration_ library supplements
 the Lightning callback mechanism to ensure we support async checkpointing and some app lifecycle events not supported by Lightning callback API.
 
+## Minmum Requirements
+
+- `python` version `>= 3.9, < 3.14`.
+- `torch` version `>= 2.8.0`.
+- `pytorch-lightning` version `>=2.5.3`.
+
 ## Integrate nv-one-logger to PTL application via hook_trainer_cls
 
  `hook_trainer_cls` adds telemetry hooks to your [Trainer](https://lightning.ai/docs/pytorch/stable/common/trainer.html). 

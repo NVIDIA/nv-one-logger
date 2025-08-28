@@ -15,7 +15,7 @@ ptl-int-build-prod-job:
     - merged
     - main
   image: 
-    name: python:3.8
+    name: python:3.9
   before_script:
     - echo "installing poetry."
     - pip install poetry==1.8.5 wheel
@@ -46,7 +46,7 @@ ptl-int-build-staging-job:
     - merged
     - develop
   image: 
-    name: python:3.8
+    name: python:3.9
   before_script:
     - echo "installing poetry."
     - pip install poetry==1.8.5 wheel
@@ -74,7 +74,7 @@ ptl-int-unit-tests:
   stage: test
   coverage: '/TOTAL.*\s+(\d+%)$/'
   image: 
-    name: python:3.8
+    name: python:3.9
   before_script:
   script:
     - echo "installing poetry."

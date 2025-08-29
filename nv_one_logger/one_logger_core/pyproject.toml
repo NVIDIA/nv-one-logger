@@ -7,6 +7,10 @@ readme = "README.md"
 packages = [
     {include = "nv_one_logger", from = "src"},
 ]
+license = "Apache-2.0"
+
+[project.urls]
+Homepage = "https://github.com/NVIDIA/nv-one-logger"
 
 [tool.poetry.dependencies]
 python = "^3.8"

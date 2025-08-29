@@ -9,7 +9,7 @@ stages:
 
 otel-build-prod-job:
   stage: build_deploy
-  needs: [otel-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
+  needs: [otel-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   when: manual
   only: 
     - merged

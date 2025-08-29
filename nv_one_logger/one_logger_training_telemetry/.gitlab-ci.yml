@@ -9,7 +9,7 @@ stages:
 
 telemetry-build-prod-job:
   stage: build_deploy
-  needs: [telemetry-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
+  needs: [telemetry-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
   when: manual
   only: 
     - merged

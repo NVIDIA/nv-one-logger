@@ -638,6 +638,45 @@ class TestTrainingRecorderUpdateApplicationSpanWithTrainingTelemetryConfig:
         # Verify that the method executed without errors
         # The perf_tag should be handled correctly as a list
 
+    def test_update_application_span_skipped_when_disabled(self, caplog) -> None:
+        """When OneLogger is disabled for current rank, the update call should be skipped without error."""
+        from nv_one_logger.api.config import OneLoggerConfig
+        from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
+
+        from .utils import reset_singletong_providers_for_test
+
+        # Reinitialize providers
+        reset_singletong_providers_for_test()
+
+        # Configure provider with logging disabled for current rank
+        disabled_base = OneLoggerConfig(
+            application_name="app",
+            session_tag_or_fn="sess",
+            world_size_or_fn=1,
+            enable_for_current_rank=False,
+        )
+        provider = TrainingTelemetryProvider.instance()
+        provider.with_base_config(disabled_base).configure_provider()
+        recorder: TrainingRecorder = provider.recorder
+
+        # Prepare a training telemetry config
+        cfg = TrainingTelemetryConfig(
+            perf_tag_or_fn="perf",
+            global_batch_size_or_fn=4,
+            log_every_n_train_iterations=10,
+        )
+
+        # Capture warning logs from safely_execute skip
+        caplog.set_level("WARNING")
+
+        # Execute: should be skipped, not raising even though no app span exists
+        recorder._update_application_span_with_training_telemetry_config(training_telemetry_config=cfg)
+
+        # Verify skip log emitted
+        assert any(
+            "Skipping execution of _update_application_span_with_training_telemetry_config" in m for m in caplog.messages
+        ), "Expected safely_execute to skip execution when OneLogger is disabled"
+
 
 def test_timer_auto_stop_error_recording(training_recorder: TrainingRecorder, mock_perf_counter: Mock, mock_time: Mock) -> None:
     """Test that timer auto-stop functionality records an error event on the span.

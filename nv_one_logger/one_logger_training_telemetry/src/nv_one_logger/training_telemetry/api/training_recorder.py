@@ -19,6 +19,7 @@ from nv_one_logger.core.event import Event
 from nv_one_logger.core.exceptions import OneLoggerError, assert_that
 from nv_one_logger.core.internal.metric_summarizer import MetricSummarizer
 from nv_one_logger.core.internal.multi_window_timer import MultiWindowTimer
+from nv_one_logger.core.internal.safe_execution import safely_execute
 from nv_one_logger.core.internal.version import get_version
 from nv_one_logger.core.span import Span, SpanName, StandardSpanName
 from nv_one_logger.core.time import TracingTimestamp
@@ -413,6 +414,7 @@ class TrainingRecorder(DefaultRecorder):
         # Finalize everything and clean up.
         self.close()
 
+    @safely_execute
     def _update_application_span_with_training_telemetry_config(self, training_telemetry_config: TrainingTelemetryConfig) -> None:
         """Update the application span with training telemetry configuration when training config becomes available.
 

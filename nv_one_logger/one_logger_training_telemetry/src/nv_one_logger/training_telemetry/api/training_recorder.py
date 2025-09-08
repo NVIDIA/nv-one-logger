@@ -896,13 +896,17 @@ class TrainingRecorder(DefaultRecorder):
             stop_time=stop_time,
         )
 
-    def create_sync_checkpoint_metrics_event(self) -> Event:
-        """Create an event of type SYNC_CHECKPOINT_METRICS_UPDATE using the most recent checkpoint metrics."""
-        sync_checkpoint_timer = self._training_state.multi_iteration_timers[StandardTrainingJobSpanName.CHECKPOINT_SAVE_SYNC]
+    def create_sync_checkpoint_metrics_event(self, span_name: StandardTrainingJobSpanName) -> Event:
+        """Create an event of type SYNC_CHECKPOINT_METRICS_UPDATE using the most recent checkpoint metrics.
+
+        Although the event name says "SYNC", this captures the main-thread window (start→end) for checkpoint
+        saving regardless of strategy (SYNC or ASYNC). The appropriate timer is selected based on the span.
+        """
+        checkpoint_timer = self._training_state.multi_iteration_timers[span_name]
         attributes = SyncCheckpointMetricsUpdateAttributes.create(
-            save_checkpoint_sync_time_total_sec=sync_checkpoint_timer.total_time_sec,
-            save_checkpoint_sync_time_min_sec=sync_checkpoint_timer.min_window_duration_sec,
-            save_checkpoint_sync_time_max_sec=sync_checkpoint_timer.max_window_duration_sec,
+            save_checkpoint_sync_time_total_sec=checkpoint_timer.total_time_sec,
+            save_checkpoint_sync_time_min_sec=checkpoint_timer.min_window_duration_sec,
+            save_checkpoint_sync_time_max_sec=checkpoint_timer.max_window_duration_sec,
         )
         return Event.create(name=StandardTrainingJobEventName.SYNC_CHECKPOINT_METRICS_UPDATE, attributes=attributes)
 
@@ -1032,9 +1036,8 @@ class TrainingRecorder(DefaultRecorder):
         if training_telemetry_config.is_save_checkpoint_enabled:
             self._training_state.multi_iteration_timers[span.name].stop(stop_time=stop_time)  # type: ignore[reportArgumentType]
 
-            # Step 2: send an event of type SYNC_CHECKPOINT_METRICS_UPDATE if sync checkpoint.
-            if training_telemetry_config.save_checkpoint_strategy == CheckPointStrategy.SYNC:
-                self.event(span, self.create_sync_checkpoint_metrics_event())
+            # Step 2: send an event of type SYNC_CHECKPOINT_METRICS_UPDATE for both sync and async strategies.
+            self.event(span, self.create_sync_checkpoint_metrics_event(span.name))
 
         # Step 3: stop the span.
         self.stop(span=span, stop_time=stop_time)

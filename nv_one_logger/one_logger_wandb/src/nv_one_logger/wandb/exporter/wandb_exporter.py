@@ -2,6 +2,7 @@
 import multiprocessing as mp
 import multiprocessing.connection
 import sys
+import time
 import traceback
 import uuid
 from abc import ABC, abstractmethod
@@ -156,6 +157,11 @@ class FlatMetricNamingStrategy(MetricNamingStrategy):
 _ENV_VAR_WANDB_RUN_ID = "WANDB_RUN_ID"
 _ENV_VAR_WANDB_SERVICE = "WANDB_SERVICE"
 _DEFAULT_METRIC_NAMING_STRATEGY = HierarchicalMetricNamingStrategy()
+
+
+def get_current_time_msec() -> int:
+    """Return current wall-clock time in milliseconds since epoch."""
+    return round(time.time() * 1000.0)
 
 
 class WandBExporterBase(BaseExporter):
@@ -314,6 +320,7 @@ class WandBExporterSync(WandBExporterBase):
     def _log_metrics(self, metrics: Dict[str, Any]) -> None:
         if not metrics:
             return
+        metrics["app_last_log_time"] = get_current_time_msec()
         self._run.log(data=metrics, commit=True)
 
 
@@ -474,6 +481,7 @@ class WandBExporterAsync(WandBExporterBase):
 
         assert_that(self.ready, "Exporter is not ready. Cannot log metrics.")
         # Send metrics data to the child process
+        metrics["app_last_log_time"] = get_current_time_msec()
         self._conn_to_child.send(obj=metrics)
 
         # On the first call to wandb, do a check to make sure everything worked as expected.

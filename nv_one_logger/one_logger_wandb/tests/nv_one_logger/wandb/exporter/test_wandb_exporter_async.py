@@ -96,11 +96,12 @@ class TestWandBExporterAsync:
                 FlatMetricNamingStrategy(),
                 [
                     # span start
-                    {f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 500000},
+                    {f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 500000, "app_last_log_time": 1000},
                     # span stop
                     {
                         f"{StandardSpanAttributeName.DURATION_MSEC}": 5310,
                         f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 505310,
+                        "app_last_log_time": 1000,
                     },
                 ],
             ),
@@ -108,11 +109,12 @@ class TestWandBExporterAsync:
                 HierarchicalMetricNamingStrategy(),
                 [
                     # span start
-                    {f"test_span1.span_start.{StandardEventAttributeName.TIMESTAMP_MSEC}": 500000},
+                    {f"test_span1.span_start.{StandardEventAttributeName.TIMESTAMP_MSEC}": 500000, "app_last_log_time": 1000},
                     # span stop
                     {
                         "test_span1.duration_msec": 5310,
                         f"test_span1.span_stop.{StandardEventAttributeName.TIMESTAMP_MSEC}": 505310,
+                        "app_last_log_time": 1000,
                     },
                 ],
             ),
@@ -146,12 +148,14 @@ class TestWandBExporterAsync:
                         "span_attrib_key": "span_attrib_val",
                         "start_event_attr_key": "start_event_attr_val",
                         f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 500000,
+                        "app_last_log_time": 1000,
                     },
                     # span stop
                     {
                         f"{StandardSpanAttributeName.DURATION_MSEC}": 5310,
                         "stop_event_attr_key": "stop_event_attr_val",
                         f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 505310,
+                        "app_last_log_time": 1000,
                     },
                 ],
             ),
@@ -163,12 +167,14 @@ class TestWandBExporterAsync:
                         "test_span2.span_attrib_key": "span_attrib_val",
                         "test_span2.span_start.start_event_attr_key": "start_event_attr_val",
                         f"test_span2.span_start.{StandardEventAttributeName.TIMESTAMP_MSEC}": 500000,
+                        "app_last_log_time": 1000,
                     },
                     # span stop
                     {
                         "test_span2.duration_msec": 5310,
                         "test_span2.span_stop.stop_event_attr_key": "stop_event_attr_val",
                         f"test_span2.span_stop.{StandardEventAttributeName.TIMESTAMP_MSEC}": 505310,
+                        "app_last_log_time": 1000,
                     },
                 ],
             ),
@@ -203,7 +209,7 @@ class TestWandBExporterAsync:
                 FlatMetricNamingStrategy(),
                 [
                     # span start
-                    {"span_attrib_key": "span_attrib_val", f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 500000},
+                    {"span_attrib_key": "span_attrib_val", f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 500000, "app_last_log_time": 1000},
                     # No metric are emitted for errors.
                 ],
             ),
@@ -214,6 +220,7 @@ class TestWandBExporterAsync:
                     {
                         "test_span1.span_attrib_key": "span_attrib_val",
                         f"test_span1.span_start.{StandardEventAttributeName.TIMESTAMP_MSEC}": 500_000,
+                        "app_last_log_time": 1000,
                     },
                     # No metric are emitted for errors.
                 ],
@@ -257,20 +264,21 @@ class TestWandBExporterAsync:
                 FlatMetricNamingStrategy(),
                 [
                     # span start
-                    {f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 600000},
+                    {f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 600000, "app_last_log_time": 1000},
                     # event.
-                    {"ev1_attr1": "ev1_val1", f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 602500},
+                    {"ev1_attr1": "ev1_val1", f"{StandardEventAttributeName.TIMESTAMP_MSEC}": 602500, "app_last_log_time": 1000},
                 ],
             ),
             (
                 HierarchicalMetricNamingStrategy(),
                 [
                     # span start
-                    {f"test_span1.span_start.{StandardEventAttributeName.TIMESTAMP_MSEC}": 600000},
+                    {f"test_span1.span_start.{StandardEventAttributeName.TIMESTAMP_MSEC}": 600000, "app_last_log_time": 1000},
                     # event.
                     {
                         "test_span1.event1.ev1_attr1": "ev1_val1",
                         f"test_span1.event1.{StandardEventAttributeName.TIMESTAMP_MSEC}": 602500,
+                        "app_last_log_time": 1000,
                     },
                 ],
             ),
@@ -353,4 +361,4 @@ class TestWandBExporterAsync:
         )
         telemetry_data_error._timestamp = timestamp  # type: ignore[reportPrivateUsage]
         exporter.export_telemetry_data_error(telemetry_data_error)
-        assert self._get_logged_metrics(exporter) == [{StandardEventName.TELEMETRY_DATA_ERROR.value: error_type.name}]
+        assert self._get_logged_metrics(exporter) == [{StandardEventName.TELEMETRY_DATA_ERROR.value: error_type.name, "app_last_log_time": 1000}]

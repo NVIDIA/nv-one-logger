@@ -1091,7 +1091,11 @@ class SaveCheckpointSuccessEventAttributes(Attributes):
 
 
 class SyncCheckpointMetricsUpdateAttributes(Attributes):
-    """Event attributes for a SYNC_CHECKPOINT_METRICS_UPDATE event of the CHECKPOINT_SAVE_SYNC span for training jobs."""
+    """Event attributes for a SYNC_CHECKPOINT_METRICS_UPDATE event of checkpoint save spans.
+
+    Despite the event name, these attributes represent the timing of the main-thread window
+    (start→end) for saving a checkpoint and apply to both SYNC and ASYNC strategies.
+    """
 
     @classmethod
     def create(

@@ -520,3 +520,17 @@ def test_time_event_callback_init() -> None:
         # Verify on_app_start was called
         mock_app_start.assert_called_once_with()
         assert mock_app_start.call_args == ((), {})  # No positional or keyword arguments
+
+
+@pytest.mark.parametrize("config", [CheckPointStrategy.SYNC], indirect=True, ids=["sync"])
+def test_time_event_callback_init_disabled() -> None:
+    """Test TimeEventCallback initialization with call_on_app_start disabled.
+
+    This test verifies that on_app_start() is NOT called when the flag is False.
+    """
+    with patch("nv_one_logger.training_telemetry.integration.pytorch_lightning.on_app_start") as mock_app_start:
+        # Initialize TimeEventCallback with flag disabled
+        TimeEventCallback(TrainingTelemetryProvider.instance(), call_on_app_start=False)
+
+        # Verify on_app_start was not called
+        mock_app_start.assert_not_called()

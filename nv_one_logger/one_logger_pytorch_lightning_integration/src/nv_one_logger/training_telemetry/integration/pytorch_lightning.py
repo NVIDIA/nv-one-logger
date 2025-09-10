@@ -61,14 +61,17 @@ class TimeEventCallback(Callback):
     plan to collect telemetry on checkpointing, we recommend using the OneLoggerPTLTrainer class.
     """
 
-    def __init__(self, training_telemetry_provider: TrainingTelemetryProvider):
+    def __init__(self, training_telemetry_provider: TrainingTelemetryProvider, call_on_app_start: bool = True):
         """Initialize the TimeEventCallback.
 
         Args:
             training_telemetry_provider (TrainingTelemetryProvider): The training telemetry provider.
+            call_on_app_start (bool): Whether to call on_app_start() during initialization. Defaults to True. Set to False when
+                you need explicit lifecycle control to avoid an implicit on_app_start call.
         """
         self._provider: TrainingTelemetryProvider = training_telemetry_provider
-        on_app_start()
+        if call_on_app_start:
+            on_app_start()
 
     @override
     def on_train_start(self, trainer: ptl.Trainer, pl_module: ptl.LightningModule) -> None:

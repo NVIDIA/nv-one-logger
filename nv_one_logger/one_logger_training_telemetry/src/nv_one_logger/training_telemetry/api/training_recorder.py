@@ -414,6 +414,31 @@ class TrainingRecorder(DefaultRecorder):
         # Finalize everything and clean up.
         self.close()
 
+    def on_distributed_init_start(self, start_time: TracingTimestamp) -> Span:
+        """Start a new span for distributed initialization.
+
+        Args:
+            start_time: The timestamp of the start of distributed initialization.
+
+        Returns:
+            Span: The newly created span for distributed initialization.
+        """
+        return self.start(
+            span_name=StandardTrainingJobSpanName.DIST_INIT,
+            start_time=start_time,
+        )
+
+    def on_distributed_init_end(self, stop_time: TracingTimestamp) -> None:
+        """Stop the distributed initialization span, and update the state if necessary.
+
+        Args:
+            stop_time: The timestamp of the end of distributed initialization.
+        """
+        self.stop(
+            span=self._get_active_span(StandardTrainingJobSpanName.DIST_INIT),
+            stop_time=stop_time,
+        )
+
     @safely_execute
     def _update_application_span_with_training_telemetry_config(self, training_telemetry_config: TrainingTelemetryConfig) -> None:
         """Update the application span with training telemetry configuration when training config becomes available.

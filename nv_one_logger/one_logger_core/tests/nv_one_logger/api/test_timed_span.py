@@ -92,7 +92,7 @@ class TestTimedSpan:
 
         assert e.value == test_error
         mock_recorder.start.assert_called_once_with(span_name=span_name, span_attributes=None, start_event_attributes=None)
-        mock_recorder.error.assert_called_once_with(the_span, f"Error in {span_name}:", test_error)
+        mock_recorder.error.assert_called_once_with(the_span, f"Error in {span_name}: ", test_error)
         mock_recorder.stop.assert_called_once_with(the_span)
         # Verify no other methods were called
         assert len(mock_recorder.method_calls) == 3

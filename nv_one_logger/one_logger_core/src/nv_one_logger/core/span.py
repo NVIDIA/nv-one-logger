@@ -171,7 +171,7 @@ class Span:
         """Check if the span is still active."""
         assert_that(
             self._timer.running or (len(self.events) > 1 and self.events[-1].name == StandardEventName.SPAN_STOP),
-            f"inconsistent span state: time running: {self._timer.running}, events:{self.events}",
+            f"inconsistent span state: time running: {self._timer.running}, events: {self.events}",
         )
         return self._timer.running
 

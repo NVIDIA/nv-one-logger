@@ -28,6 +28,8 @@ from nv_one_logger.training_telemetry.api.callbacks import (
     on_app_start,
     on_dataloader_init_end,
     on_dataloader_init_start,
+    on_distributed_init_end,
+    on_distributed_init_start,
     on_load_checkpoint_end,
     on_load_checkpoint_start,
     on_model_init_end,
@@ -183,6 +185,65 @@ def test_app_lifecycle_callbacks(
             Exporter.export_event,  # UPDATE_TRAINING_TELEMETRY_CONFIG
             Exporter.export_stop,
             Exporter.close,
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    "start_time_msec,finish_time_msec",
+    [
+        (None, None),
+        ((STARTING_TIME - 40) * 1000, None),
+        ((STARTING_TIME - 40) * 1000, (STARTING_TIME - 2) * 1000),
+    ],
+    ids=["no_times", "start_time_only", "both_times"],
+)
+def test_distributed_init_callbacks(
+    mock_exporter: MagicMock,
+    mock_perf_counter: Mock,
+    mock_time: Mock,
+    start_time_msec: Union[float, None],
+    finish_time_msec: Union[float, None],
+) -> None:
+    """Test that distributed initialization callbacks create and stop the appropriate spans.
+
+    Args:
+        mock_exporter: Mocked exporter instance
+        mock_perf_counter: Mocked perf counter
+        mock_time: Mocked time
+        start_time_msec: Optional start time in milliseconds. If None, current time will be used.
+        finish_time_msec: Optional end time in milliseconds. If None, current time will be used.
+    """
+    on_distributed_init_start(start_time_msec)
+
+    # Verify span start
+    assert mock_exporter.export_start.call_count == 1
+    span = span_from_export_start(mock_exporter, None)
+    assert span.name == StandardTrainingJobSpanName.DIST_INIT
+    assert span.attributes == Attributes({})
+
+    advance_time(mock_time, mock_perf_counter, 10.0)
+    on_distributed_init_end(finish_time_msec)
+
+    # Verify span end
+    assert mock_exporter.export_stop.call_count == 1
+    span = span_from_export_stop(mock_exporter)
+    assert span.name == StandardTrainingJobSpanName.DIST_INIT
+
+    expected_start = start_time_msec if start_time_msec is not None else STARTING_TIME * 1000
+    expected_finish = finish_time_msec if finish_time_msec is not None else (STARTING_TIME + 10) * 1000
+    expected_duration = expected_finish - expected_start
+
+    assert span.attributes == Attributes({StandardSpanAttributeName.DURATION_MSEC: expected_duration})
+
+    assert_only_start_stop_event(span, mock_exporter)
+
+    assert_exporter_method_call_sequence(
+        mock_exporter,
+        [
+            Exporter.initialize,
+            Exporter.export_start,
+            Exporter.export_stop,
         ],
     )
 

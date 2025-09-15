@@ -245,6 +245,7 @@ if _augmented_async_checkpoint_io_enabled:  # noqa: C901
             Raises:
                 BaseException: Raises any exception encountered during the checkpoint saving process.
             """
+            self._ensure_setup()
             global_step = args[0]["global_step"]
 
             def _save_checkpoint(*args: Any, **kwargs: Any) -> None:

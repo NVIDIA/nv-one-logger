@@ -88,7 +88,7 @@ def timed_span(
     try:
         yield span
     except Exception as e:
-        recorder.error(span, f"Error in {name}:", e)
+        recorder.error(span, f"Error in {name}: ", e)
         raise e
     finally:
         recorder.stop(span)

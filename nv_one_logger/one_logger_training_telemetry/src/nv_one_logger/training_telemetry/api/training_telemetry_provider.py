@@ -333,7 +333,7 @@ class TrainingTelemetryProvider(metaclass=SingletonMeta["TrainingTelemetryProvid
         try:
             return OneLoggerConfig(**merged_config)
         except Exception as e:
-            raise OneLoggerError(f"Invalid configuration! Did you forget some required fields? : {e}") from e
+            raise OneLoggerError(f"Invalid configuration! Did you forget some required fields?: {e}") from e
 
     def _nested_dict_update(self, base_dict: Dict[str, Any], override_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Update a nested dictionary with another nested dictionary."""

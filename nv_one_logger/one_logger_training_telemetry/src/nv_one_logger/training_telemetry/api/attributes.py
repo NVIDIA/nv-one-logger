@@ -204,7 +204,7 @@ class OneLoggerInitializationAttributes(Attributes):
 
         if custom_metadata is not None:
             # Flatten custom metadata to comply with the expected type of the `add` method.
-            attributes.add("custom_metadata", [f"{k}:{v}" for k, v in custom_metadata.items()])
+            attributes.add("custom_metadata", [f"{k}:{v}" for k, v in custom_metadata.items()])  # noqa: E231
 
         return attributes
 

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nv-one-logger-pytorch-lightning-integration"
-version = "2.0.1-rc.1"
+version = "2.1.0-rc.2"
 description = "Wrappers that facilitate enabling training job telemetry for a set of supported training frameworks."
 authors = ["HWInf-MLWFO <HWInf-MLWFO-E2E-Dev@exchange.nvidia.com>"]
 readme = "README.md"
@@ -19,7 +19,7 @@ python = ">=3.9,<3.14"
 StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python requirement to >= 3.11
 # pytorch-lightning version required minimum 2.5.3 to meet security requirement.
 pytorch-lightning = {version = ">=2.5.3"}
-nv-one-logger-core = {version = "^2.0.0", source = "mlwfo-staging-pypi"}
+nv-one-logger-core = {version = "^2.1.0-rc.2", source = "mlwfo-staging-pypi"}
 nv-one-logger-training-telemetry = {version = "^2.0.1-rc.1", source = "mlwfo-staging-pypi"}
 # pytorch version required minimum 2.8.0 to meet security requirement.
 torch = { version = ">=2.8.0" }
@@ -40,7 +40,7 @@ pre-commit = "^3.5.0"
 pytest = "^8.3.4"
 pytest-cov = "^5.0.0"
 annotated-types = "^0.7.0"
-typing-extensions = "^4.13.2"
+typing-extensions = "^4.12.2"
 mypy-extensions = "^1.0.0"
 flake8 = "^5.0.4"
 flake8-bugbear = "^23.3.12"

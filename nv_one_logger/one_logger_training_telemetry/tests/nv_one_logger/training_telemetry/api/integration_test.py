@@ -29,6 +29,8 @@ from nv_one_logger.training_telemetry.api.callbacks import (
     on_app_start,
     on_dataloader_init_end,
     on_dataloader_init_start,
+    on_distributed_init_end,
+    on_distributed_init_start,
     on_load_checkpoint_end,
     on_load_checkpoint_start,
     on_model_init_end,
@@ -128,6 +130,21 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
     expected_calls.append(Exporter.export_event)  # For ONE_LOGGER_INITIALIZATION event
     expected_calls.append(Exporter.export_event)  # For UPDATE_TRAINING_TELEMETRY_CONFIG event
     advance_time(mock_time, mock_perf_counter, 10.0)  # move perf counter to 5010
+
+    # DIST_INIT span
+    on_distributed_init_start()
+    expected_calls.append(Exporter.export_start)
+    span = span_from_export_start(mock_exporter, app_span)
+    assert span.name == StandardTrainingJobSpanName.DIST_INIT
+    assert_only_start_event(span)
+    assert span.start_event.attributes == Attributes({StandardEventAttributeName.TIMESTAMP_MSEC: _cur_ts(mock_time)})
+
+    advance_time(mock_time, mock_perf_counter, 20.0)  # move perf counter to 5030
+    on_distributed_init_end()
+    expected_calls.append(Exporter.export_stop)
+    assert span == span_from_export_stop(mock_exporter)
+    assert_only_start_stop_event(span, mock_exporter)
+    assert span.stop_event.attributes == Attributes({StandardEventAttributeName.TIMESTAMP_MSEC: _cur_ts(mock_time)})
 
     # DATA_LOADER_INIT span
     on_dataloader_init_start()

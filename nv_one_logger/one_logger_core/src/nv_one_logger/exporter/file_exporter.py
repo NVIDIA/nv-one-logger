@@ -68,5 +68,6 @@ class FileExporter(BaseJsonExporter):
         with self._lock:
             try:
                 self._file.write(json_str + "\n")
+                self._file.flush()
             except Exception as e:
                 _logger.error(f"Error writing record to file: {e}")

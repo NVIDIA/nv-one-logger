@@ -7,21 +7,23 @@ from typing import Any, Dict, Generator, Tuple
 from unittest.mock import MagicMock, patch
 
 import pytest
-import pytorch_lightning as ptl
 import torch
 from nv_one_logger.api.config import OneLoggerConfig
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
-from nv_one_logger.core.exceptions import OneLoggerError
 from nv_one_logger.core.internal.singleton import SingletonMeta
 from nv_one_logger.exporter.exporter import Exporter
 from nv_one_logger.training_telemetry.api.checkpoint import CheckPointStrategy
 from nv_one_logger.training_telemetry.api.config import TrainingTelemetryConfig
 from nv_one_logger.training_telemetry.api.spans import StandardTrainingJobSpanName
 from nv_one_logger.training_telemetry.api.training_telemetry_provider import TrainingTelemetryProvider
-from pytorch_lightning import LightningModule, Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader, TensorDataset
 
+from nv_one_logger.training_telemetry.integration._compat.lightning import (
+    LightningModule,
+    ModelCheckpoint,
+    Trainer,
+    ptl,
+)
 from nv_one_logger.training_telemetry.integration.pytorch_lightning import (
     OneLoggerPTLTrainer,
     TimeEventCallback,
@@ -181,15 +183,13 @@ def test_one_logger_ptl_trainer(
     """Tests PTL integration and verifies that supported telemetry callbacks are called implicitly.
 
     Args:
-        checkpoint_strategy (CheckPointStrategy): The checkpoint strategy to use (SYNC or ASYNC)
+        config (OneLoggerConfig): Configuration for OneLogger Object.
         use_hook_trainer_cls (bool): Whether to use the hook_trainer_cls function to patch the Trainer class or use
         the OneLoggerPTLTrainer class directly.
         dummy_model (DummyModel): A dummy PyTorch Lightning model for testing
         dummy_data (tuple[DataLoader, DataLoader]): Tuple of (train_loader, val_loader)
-        config (TrainingTelemetryConfig): Configuration for training telemetry
         checkpoints_dir (str): Path to the checkpoints directory.
     """
-    checkpoint_strategy = config.telemetry_config.save_checkpoint_strategy
     train_loader, val_loader = dummy_data
 
     # Create the model and trainer
@@ -239,14 +239,9 @@ def test_one_logger_ptl_trainer(
         "nv_one_logger.training_telemetry.integration.pytorch_lightning.on_validation_single_iteration_end"
     ) as mock_val_iter_end:
         if use_hook_trainer_cls:
-            if checkpoint_strategy == CheckPointStrategy.SYNC:
-                HookedTrainer, telemetry_callback = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
-                trainer = HookedTrainer(**trainer_config)
-                assert telemetry_callback == trainer.nv_one_logger_callback
-            else:
-                with pytest.raises(OneLoggerError, match=r"'hook_trainer_cls\(\)' doesn't support async checkpointing yet. Use 'OneLoggerPTLTrainer' instead."):
-                    hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
-                return
+            HookedTrainer, telemetry_callback = hook_trainer_cls(Trainer, TrainingTelemetryProvider.instance())
+            trainer = HookedTrainer(**trainer_config)
+            assert telemetry_callback == trainer.nv_one_logger_callback
         else:
             trainer = OneLoggerPTLTrainer(
                 trainer_config=trainer_config,
@@ -288,14 +283,16 @@ def test_one_logger_ptl_trainer(
             Trainer.save_checkpoint = original_save_checkpoint
 
 
-@pytest.mark.parametrize("config", [CheckPointStrategy.SYNC], indirect=True, ids=["sync"])
+@pytest.mark.parametrize("config", [CheckPointStrategy.SYNC, CheckPointStrategy.ASYNC], indirect=True, ids=["sync", "async"])
 @pytest.mark.parametrize("use_hook_trainer_cls", [True, False], ids=["use_hook_trainer_cls", "use_one_logger_ptl_trainer"])
 def test_explicit_telemetry_callback_invocation(
+    config: TrainingTelemetryConfig,
     use_hook_trainer_cls: bool,
 ) -> None:
     """Test the OneLoggerPTLTrainer with explicit telemetry callback invocation.
 
     Args:
+        config (TrainingTelemetryConfig): Configuration for training telemetry
         use_hook_trainer_cls (bool): Whether to use the hook_trainer_cls function to patch the Trainer class or use
         the OneLoggerPTLTrainer class directly.
     """
@@ -373,6 +370,7 @@ def test_explicit_telemetry_callback_invocation(
 
 @pytest.mark.parametrize("config", [CheckPointStrategy.SYNC], indirect=True, ids=["sync"])
 def test_on_validation_batch_start_auto_end_previous_validation_single_iteration(
+    config: TrainingTelemetryConfig,
     dummy_data: Tuple[DataLoader[Tuple[torch.Tensor, torch.Tensor]], DataLoader[Tuple[torch.Tensor, torch.Tensor]]],
 ) -> None:
     """Test auto calling on_validation_batch_end when validation_step returns None.
@@ -423,6 +421,7 @@ def test_on_validation_batch_start_auto_end_previous_validation_single_iteration
 @pytest.mark.parametrize("config", [CheckPointStrategy.SYNC], indirect=True, ids=["sync"])
 @pytest.mark.parametrize("use_hook_trainer_cls", [True, False], ids=["use_hook_trainer_cls", "use_one_logger_ptl_trainer"])
 def test_telemetry_callback_is_first_in_callback_list(
+    config: TrainingTelemetryConfig,
     use_hook_trainer_cls: bool,
 ) -> None:
     """Test that the telemetry callback is placed at the beginning of the callback list.
@@ -431,6 +430,7 @@ def test_telemetry_callback_is_first_in_callback_list(
     which is important for accurate timing measurements.
 
     Args:
+        config (TrainingTelemetryConfig): Configuration for training telemetry
         use_hook_trainer_cls (bool): Whether to use the hook_trainer_cls function to patch the Trainer class or use
         the OneLoggerPTLTrainer class directly.
     """

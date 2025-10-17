@@ -649,11 +649,15 @@ class TestTrainingRecorderUpdateApplicationSpanWithTrainingTelemetryConfig:
         reset_singletong_providers_for_test()
 
         # Configure provider with logging disabled for current rank
+        # Explicitly set propagate exceptions to ensure WARNING level logs for this test
+        from nv_one_logger.api.config import OneLoggerErrorHandlingStrategy
+
         disabled_base = OneLoggerConfig(
             application_name="app",
             session_tag_or_fn="sess",
             world_size_or_fn=1,
             enable_for_current_rank=False,
+            error_handling_strategy=OneLoggerErrorHandlingStrategy.PROPAGATE_EXCEPTIONS,
         )
         provider = TrainingTelemetryProvider.instance()
         provider.with_base_config(disabled_base).configure_provider()

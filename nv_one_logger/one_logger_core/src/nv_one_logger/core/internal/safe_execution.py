@@ -4,6 +4,7 @@
 This module provides utilities that help ensure that errors in onelogger library do not cause the instrumented application to crash.
 """
 
+import logging
 from functools import wraps
 from typing import Any, Callable
 
@@ -11,10 +12,26 @@ from nv_one_logger.api.config import OneLoggerErrorHandlingStrategy
 from nv_one_logger.api.one_logger_provider import OneLoggerProvider
 from nv_one_logger.core.internal.logging import get_logger
 
-_logger = get_logger(__name__)
 
-# Depending on the user provided OneLoggerErrorHandlingStrategy, we may need to handle issues in collecting or exporting telemetry data
-# in different ways. However, regardless of the strategy, we don't want to pollute the application logs with tens of errors related from telemetry code.
+def _get_logger():
+    """Get logger lazily to ensure it picks up configuration.
+
+    Falls back to plain Python logging if OneLoggerProvider is not configured.
+
+    TODO: This is a short-term fix for timing issues where loggers are created before
+    OneLoggerProvider.configure() is called. Long-term solution: implement a mechanism
+    in logging.py to track and update all previously created loggers when configuration
+    changes, so we don't need lazy initialization.
+    """
+    try:
+        return get_logger(__name__)
+    except (AttributeError, AssertionError, TypeError):
+        # OneLoggerProvider not configured, mocked, or config invalid - fall back to plain Python logging
+        return logging.getLogger(__name__)
+
+
+# Depending on the user provided OneLoggerErrorHandlingStrategy, we may need to handle issues in collecting or exporting telemetry data  # noqa: E501
+# in different ways. However, regardless of the strategy, we don't want to pollute the application logs with tens of errors related from telemetry code.  # noqa: E501
 # This flag allows us to control how aggresively we log telemetry data issues to the application logs.
 __telemetry_data_issue_already_logged = False
 
@@ -42,7 +59,7 @@ def exception_guard(func: Callable[..., Any]) -> Callable[..., Any]:  # noqa: C9
             except Exception:
                 pass  # not much we can do here.
             if config.error_handling_strategy == OneLoggerErrorHandlingStrategy.PROPAGATE_EXCEPTIONS:
-                _logger.error(error_message)
+                _get_logger().error(error_message)
                 raise e
             elif config.error_handling_strategy == OneLoggerErrorHandlingStrategy.DISABLE_QUIETLY_AND_REPORT_METRIC_ERROR:
                 if OneLoggerProvider.instance().one_logger_enabled:
@@ -54,12 +71,14 @@ def exception_guard(func: Callable[..., Any]) -> Callable[..., Any]:  # noqa: C9
                     # disabling one logger doesn't take effect for some reason.
                     if not __telemetry_data_issue_already_logged:
                         __telemetry_data_issue_already_logged = True
-                        _logger.error(f"OneLogger encountered a fatal error. Disabling OneLogger and telemetry data collection. Error: {error_message}")
+                        _get_logger().error(
+                            f"OneLogger encountered a fatal error. Disabling OneLogger and telemetry data collection. Error: {error_message}"
+                        )  # noqa: E501
 
                     OneLoggerProvider.instance().force_disable_logging()
             else:
                 # This should never happen. If it does, it means you have added a new error handling strategy without updating this function.
-                _logger.error(f"Unrecognized error handling strategy {config.error_handling_strategy}")
+                _get_logger().error(f"Unrecognized error handling strategy {config.error_handling_strategy}")
                 raise e
 
     return wrapper
@@ -80,7 +99,7 @@ def safely_execute(func: Callable[..., Any]) -> Callable[..., Any]:
             return exception_guard(func)(*args, **kwargs)
         else:
             # Skipping execution because OneLogger is not enabled.
-            _logger.warning(f"Skipping execution of {func.__name__} because OneLogger is not enabled.")
+            _get_logger().warning(f"Skipping execution of {func.__name__} because OneLogger is not enabled.")
             return None
 
     return wrapper

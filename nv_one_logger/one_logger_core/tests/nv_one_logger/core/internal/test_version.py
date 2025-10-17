@@ -19,5 +19,5 @@ def test_get_version_from_toml(mock_version: MagicMock) -> None:
     """Test that the version is read from pyproject.toml if the package is not installed."""
     mock_version.side_effect = PackageNotFoundError
     version = get_version("nv-one-logger-core")
-    assert version == "2.1.0"
+    assert version == "2.3.0"
     mock_version.assert_called_once_with("nv-one-logger-core")

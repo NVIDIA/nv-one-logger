@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nv-one-logger-otel"
-version = "2.3.0"
+version = "2.3.1"
 description = "Extensions to onelogger library to use Open telemetry (OTEL) as a backend."
 authors = ["HWInf-MLWFO <HWInf-MLWFO-E2E-Dev@exchange.nvidia.com>"]
 readme = "README.md"
@@ -18,7 +18,7 @@ StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python req
 opentelemetry-api = "^1.32.1"
 opentelemetry-sdk = "^1.32.1"
 typing-extensions = "^4.12.2"
-nv-one-logger-core = {version = "^2.3.0", source = "mlwfo-staging-pypi"}
+nv-one-logger-core = "^2.3.1"
 
 [build-system]
 requires = ["poetry-core>=1.9.1,<2.0.0", "python-semantic-release>=9.8.3,<10.0"]
@@ -105,6 +105,11 @@ exclude_lines = [
 [[tool.poetry.source]]
 name = "nv-shared-pypi"
 url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi/simple"
+
+[[tool.poetry.source]]
+ name = "mlwfo-pypi"
+ url = "https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/simple"
+ priority = "primary"
 
 [[tool.poetry.source]]
  name = "mlwfo-staging-pypi"

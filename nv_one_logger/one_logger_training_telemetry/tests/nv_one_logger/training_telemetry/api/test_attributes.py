@@ -809,7 +809,7 @@ class TestOneLoggerInitializationAttributesUpdated:
         """Test that OneLoggerInitializationAttributes only contains base config fields."""
         attrs = OneLoggerInitializationAttributes.create(
             world_size=4,
-            one_logger_training_telemetry_version="2.3.0",
+            one_logger_training_telemetry_version="2.3.1",
             enable_for_current_rank=True,
             session_tag="test_session",
             is_baseline_run=False,
@@ -820,7 +820,7 @@ class TestOneLoggerInitializationAttributesUpdated:
         )
 
         # Verify only base config fields are present
-        assert attrs.one_logger_training_telemetry_version == "2.3.0"
+        assert attrs.one_logger_training_telemetry_version == "2.3.1"
         assert attrs.enable_for_current_rank is True
         assert attrs.session_tag == "test_session"
         assert attrs.is_baseline_run is False
@@ -842,7 +842,7 @@ class TestOneLoggerInitializationAttributesUpdated:
         """Test OneLoggerInitializationAttributes without custom_metadata."""
         attrs = OneLoggerInitializationAttributes.create(
             world_size=4,
-            one_logger_training_telemetry_version="2.3.0",
+            one_logger_training_telemetry_version="2.3.1",
             enable_for_current_rank=True,
             session_tag="test_session",
             is_baseline_run=False,
@@ -859,7 +859,7 @@ class TestOneLoggerInitializationAttributesUpdated:
         """Test property access for OneLoggerInitializationAttributes."""
         attrs = OneLoggerInitializationAttributes.create(
             world_size=4,
-            one_logger_training_telemetry_version="2.3.0",
+            one_logger_training_telemetry_version="2.3.1",
             enable_for_current_rank=True,
             session_tag="test_session",
             is_baseline_run=False,
@@ -870,7 +870,7 @@ class TestOneLoggerInitializationAttributesUpdated:
         )
 
         # Test property access
-        assert attrs.one_logger_training_telemetry_version == "2.3.0"
+        assert attrs.one_logger_training_telemetry_version == "2.3.1"
         assert attrs.enable_for_current_rank is True
         assert attrs.session_tag == "test_session"
         assert attrs.is_baseline_run is False

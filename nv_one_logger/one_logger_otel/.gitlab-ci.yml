@@ -9,7 +9,7 @@ stages:
 
 otel-build-prod-job:
   stage: build_deploy
-  needs: [otel-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
+  needs: [otel-unit-tests, core-build-prod-job] # DAG dependency allow stage parallism to speed up pipeline
   when: manual
   only: 
     - merged
@@ -41,7 +41,7 @@ otel-build-prod-job:
 
 otel-build-staging-job:
   stage: build_deploy
-  needs: [otel-unit-tests] # DAG dependency allow stage parallism to speed up pipeline
+  needs: [otel-unit-tests, core-build-staging-job] # DAG dependency allow stage parallism to speed up pipeline
   only: 
     - merged
     - develop
@@ -64,7 +64,7 @@ otel-build-staging-job:
     - export E2E_PYTHON_REPO_PASSWORD=$ARTIFACTORY_STAGING_TOKEN
     - echo "making release"
     - git checkout -b $CI_COMMIT_BRANCH
-    - make ci_tag
+    - make ci_tag TAG_ENV=staging
     - echo "making publish"
     - make publish
   tags:

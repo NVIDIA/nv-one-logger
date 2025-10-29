@@ -91,11 +91,12 @@ publish:
 	$(POETRY_BIN) publish --build --repository pypi
 
 # ------------------------- CI/CD Required commands -------------------------
+TAG_ENV ?= ""
 .PHONY: ci_tag
 ci_tag:
 	@echo "---------------------setting git user and email--------------------------";
 	@git config user.name "MLWFO GitLab CI"
 	@git config user.email "hwinf-mlwfo-e2e-dev@nvidia.com"
 	@echo -n ---------------------Tagging nv-one-logger-otel-v$(PYPROJECT_VER)--------------------------
-	git tag -a nv-one-logger-otel-v$(PYPROJECT_VER) -m "Release nv-one-logger-otel v$(PYPROJECT_VER)"
-	git push $(GIT_URL_TOKEN) nv-one-logger-otel-v$(PYPROJECT_VER)
+	git tag -a nv-one-logger-otel-$(TAG_ENV)v$(PYPROJECT_VER) -m "Release nv-one-logger-otel v$(PYPROJECT_VER)"
+	git push $(GIT_URL_TOKEN) nv-one-logger-otel-$(TAG_ENV)v$(PYPROJECT_VER)

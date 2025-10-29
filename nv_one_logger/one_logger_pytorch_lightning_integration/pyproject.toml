@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nv-one-logger-pytorch-lightning-integration"
-version = "2.3.0"
+version = "2.3.1"
 description = "Wrappers that facilitate enabling training job telemetry for a set of supported training frameworks."
 authors = ["HWInf-MLWFO <HWInf-MLWFO-E2E-Dev@exchange.nvidia.com>"]
 readme = "README.md"
@@ -19,8 +19,8 @@ python = ">=3.9,<3.14"
 StrEnum = "^0.4.0" # replace with built-in StrEnum if/when we upgrade Python requirement to >= 3.11
 # lightning (formerly pytorch-lightning) version required minimum 2.0.0.
 lightning = {version = ">=2.2.0"}
-nv-one-logger-core = {version = "^2.3.0", source = "mlwfo-staging-pypi"}
-nv-one-logger-training-telemetry = {version = "^2.3.0", source = "mlwfo-staging-pypi"}
+nv-one-logger-core = "^2.3.1"
+nv-one-logger-training-telemetry = "^2.3.1"
 
 # Required by NSPECT security requirements.
 setuptools = {version = ">=79.0.0"}
@@ -116,7 +116,11 @@ name = "nv-shared-pypi"
 url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi/simple"
 
 [[tool.poetry.source]]
+ name = "mlwfo-pypi"
+ url = "https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-pypi/simple"
+ priority = "primary"
+
+[[tool.poetry.source]]
  name = "mlwfo-staging-pypi"
  url = "https://sc-hw-artf.nvidia.com/artifactory/api/pypi/hwinf-mlwfo-staging-pypi/simple"
  priority = "supplemental"
-

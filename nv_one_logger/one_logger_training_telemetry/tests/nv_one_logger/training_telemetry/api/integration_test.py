@@ -112,7 +112,7 @@ def test_training_e2e(config: TrainingTelemetryConfig, mock_exporter: MagicMock,
     actual_attributes = events[0].attributes
     expected_attributes = OneLoggerInitializationAttributes.create(
         world_size=4,
-        one_logger_training_telemetry_version="2.3.0",
+        one_logger_training_telemetry_version="2.3.1",
         enable_for_current_rank=True,
         session_tag="test_session",
         is_baseline_run=False,

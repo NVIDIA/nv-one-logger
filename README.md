@@ -90,7 +90,7 @@ Weights & Biases integration package that:
 - Supports both synchronous and asynchronous export modes
 - Enables integration with WandB's experiment tracking and visualization tools
 
-#### Application layer pacakges
+#### Application layer packages
 
 ##### one_logger_pytorch_lightning_integration
 PyTorch Lightning integration package that:

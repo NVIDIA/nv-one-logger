@@ -24,24 +24,26 @@ nv-one-logger-training-telemetry = "^2.3.1"
 
 # Required by NSPECT security requirements.
 setuptools = {version = ">=79.0.0"}
+# Required by NSPECT security requirements: CVE-2026-22701, CVE-2025-68146 (cascades to torch)
+filelock = {version = ">=3.19.2"}
 
 [build-system]
 requires = ["poetry-core>=1.9.1,<2.0.0", "python-semantic-release>=9.8.3,<10.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.8.0"
+black = "^24.10.0"
 isort = "^5.13.2"
-mypy = "^1.14.1"
+mypy = "^1.19.0"
 overrides = "^7.7.0"
-pre-commit = "^3.5.0"
-pytest = "^8.3.4"
-pytest-cov = "^5.0.0"
+pre-commit = "^4.0.0"
+pytest = "^9.0.0"
+pytest-cov = "^6.0.0"
 annotated-types = "^0.7.0"
 typing-extensions = "^4.12.2"
 mypy-extensions = "^1.0.0"
-flake8 = "^5.0.4"
-flake8-bugbear = "^23.3.12"
+flake8 = "^6.0.0"
+flake8-bugbear = "^24.0.0"
 flake8-pyproject = "^1.2.3"
 flake8-docstrings = "^1.7.0"
 python-semantic-release = "^9.8.3"
@@ -108,8 +110,9 @@ exclude_lines = [
 ]
 
 [tool.poetry.group.test.dependencies]
-# pytorch version required minimum 2.8.0 to meet security requirement. Only needed for tests.
-torch = { version = ">=2.8.0" }
+# pytorch version required minimum 2.8.1 to meet security requirement. Only needed for tests.
+# CVE-2026-24747 (High), CVE-2026-4538, CVE-2025-63396, CVE-2025-2149, CVE-2025-55551, CVE-2025-55552
+torch = { version = ">=2.8.1" }
 
 [[tool.poetry.source]]
 name = "nv-shared-pypi"
